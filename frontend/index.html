@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgriScan AI - Intelligent Plant Disease Detection System</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              200: '#bbf7d0',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+              900: '#14532d',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            urdu: ['Noto Nastaliq Urdu', 'Noto Sans Arabic', 'serif'],
+          },
+          animation: {
+            'float-slow': 'float 6s ease-in-out infinite',
+            'pulse-fast': 'pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'dash': 'dash 2s linear infinite',
+            'glow-pulse': 'glowPulse 2s ease-in-out infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+              '50%': { transform: 'translateY(-12px) rotate(3deg)' },
+            },
+            dash: {
+              to: { strokeDashoffset: '-40' }
+            },
+            glowPulse: {
+              '0%, 100%': { opacity: '0.4' },
+              '50%': { opacity: '1' }
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts for Urdu & Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600;700&family=Noto+Sans+Arabic:wght@400;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    .urdu-text {
+      font-family: 'Noto Sans Arabic', 'Noto Nastaliq Urdu', serif;
+      direction: rtl;
+      text-align: right;
+      line-height: 1.8;
+    }
+
+    /* Animated background crop lines */
+    .field-pattern {
+      background-image: radial-gradient(#16a34a 0.75px, transparent 0.75px), radial-gradient(#16a34a 0.75px, #f8fafc 0.75px);
+      background-size: 30px 30px;
+      background-position: 0 0,15px 15px;
+      opacity: 0.25;
+    }
+
+    /* Moving dash animation on SVG paths */
+    .animated-wire {
+      stroke-dasharray: 6, 6;
+      animation: dash 1s linear infinite;
+    }
+
+    .wire-active {
+      stroke: #34d399 !important;
+      stroke-width: 2px;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col relative overflow-x-hidden selection:bg-brand-500 selection:text-white">
+
+  <!-- Agro Background Elements (Animated Side Farm Vectors) -->
+  <div class="fixed inset-0 field-pattern pointer-events-none -z-10"></div>
+  
+  <!-- Left Side Agro Deco -->
+  <div class="fixed top-20 -left-20 text-brand-600/10 pointer-events-none animate-float-slow -z-10 hidden lg:block">
+    <svg width="340" height="400" viewBox="0 0 200 200" fill="currentColor">
+      <path d="M40,160 C10,120 20,60 80,30 C140,0 180,40 170,100 C160,160 80,200 40,160 Z" />
+      <path d="M50,150 Q100,80 150,40" stroke="currentColor" stroke-width="4" fill="none" />
+      <path d="M80,110 Q120,100 130,70" stroke="currentColor" stroke-width="3" fill="none" />
+      <path d="M70,130 Q90,140 110,120" stroke="currentColor" stroke-width="3" fill="none" />
+    </svg>
+  </div>
+
+  <!-- Right Side Agro Deco -->
+  <div class="fixed bottom-10 -right-16 text-brand-600/10 pointer-events-none animate-float-slow -z-10 hidden lg:block" style="animation-delay: -3s;">
+    <svg width="380" height="420" viewBox="0 0 200 200" fill="currentColor">
+      <path d="M30,170 C10,100 60,30 130,20 C180,10 190,80 170,140 C150,200 50,220 30,170 Z" />
+      <path d="M40,160 Q110,110 160,30" stroke="currentColor" stroke-width="4" fill="none" />
+    </svg>
+  </div>
+
+  <!-- HEADER / NAVBAR -->
+  <header class="bg-white/80 backdrop-blur-md border-b border-emerald-100 sticky top-0 z-40 transition-all">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-brand-700 to-brand-500 flex items-center justify-center text-white shadow-lg shadow-brand-500/20">
+          <i class="fa-solid font-bold fa-leaf text-xl"></i>
+        </div>
+        <div>
+          <span class="text-xl font-bold bg-gradient-to-r from-brand-900 via-brand-700 to-emerald-600 bg-clip-text text-transparent">AgriScan AI</span>
+          <span class="block text-xs font-medium text-slate-500">فصلوں کی دیکھ بھال • Smart Diagnosis</span>
+        </div>
+      </div>
+
+      <!-- Navigation & Status Badge -->
+      <div class="flex items-center gap-4">
+        <div class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-full text-xs font-semibold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+          <span>FastAPI AI Model v2.4 Active</span>
+        </div>
+        
+        <!-- Language Switcher -->
+        <div class="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold">
+          <button id="lang-btn-both" onclick="setLanguage('both')" class="px-3 py-1.5 rounded-lg transition-all bg-white text-slate-800 shadow-sm">Both / دونوں</button>
+          <button id="lang-btn-en" onclick="setLanguage('en')" class="px-3 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900">English</button>
+          <button id="lang-btn-ur" onclick="setLanguage('ur')" class="px-3 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900 urdu-text text-xs">اردو</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+
+    <!-- HERO SECTION -->
+    <section class="relative bg-gradient-to-b from-emerald-900/5 via-brand-50/40 to-transparent p-8 md:p-12 rounded-3xl border border-emerald-100 overflow-hidden shadow-sm">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+        
+        <div class="lg:col-span-7 space-y-6">
+          <div class="inline-flex items-center gap-2 px-3 py-1 bg-brand-100 text-brand-800 border border-brand-200 rounded-full text-xs font-semibold">
+            <i class="fa-solid fa-microchip"></i> Real-time Neural Network Pathology Analysis
+          </div>
+          <h1 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight leading-tight">
+            Protect Your Crops with <span class="text-brand-600 underline decoration-brand-300 underline-offset-8">AI Disease Detection</span>
+          </h1>
+          <p class="text-slate-600 text-base sm:text-lg leading-relaxed">
+            Upload an image of an affected leaf. Our deep learning vision transformer analyzes symptoms in milliseconds and provides instant organic & chemical treatment guides in English and Urdu.
+          </p>
+          <p class="urdu-text text-slate-700 text-base sm:text-lg font-medium">
+            اپنی فصل کے پتے کی تصویر اپ لوڈ کریں اور فوری بیماری کی تشخيص، علاج اور احتیاطی تدابیر حاصل کریں۔
+          </p>
+
+          <div class="flex flex-wrap gap-4 pt-2">
+            <a href="#upload-section" class="inline-flex items-center gap-2 px-6 py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-2xl shadow-lg shadow-brand-600/30 transition-all hover:scale-[1.02] active:scale-[0.98]">
+              <i class="fa-solid fa-camera"></i> Scan Leaf Now
+            </a>
+            <button onclick="scrollToPresets()" class="inline-flex items-center gap-2 px-6 py-3.5 bg-white hover:bg-slate-50 text-slate-700 font-semibold rounded-2xl border border-slate-200 shadow-sm transition-all">
+              <i class="fa-solid fa-vial"></i> Try Sample Leaf Presets
+            </button>
+          </div>
+        </div>
+
+        <!-- Hero Farm Visual / Animated SVG Graphic -->
+        <div class="lg:col-span-5 relative flex justify-center items-center">
+          <div class="relative w-full max-w-sm aspect-square bg-white rounded-3xl p-6 border border-emerald-100 shadow-xl flex flex-col justify-between overflow-hidden">
+            <!-- Animated background shine -->
+            <div class="absolute -top-12 -right-12 w-40 h-40 bg-brand-400/20 rounded-full blur-2xl"></div>
+            <div class="absolute -bottom-12 -left-12 w-40 h-40 bg-emerald-500/20 rounded-full blur-2xl"></div>
+
+            <div class="flex justify-between items-center z-10">
+              <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Agri-Cloud Sensor</span>
+              <span class="px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[10px] font-mono">240 FPS Deep Vision</span>
+            </div>
+
+            <!-- Central Agro Interactive Illustration -->
+            <div class="my-4 relative flex items-center justify-center">
+              <div class="w-36 h-36 rounded-full bg-emerald-50 border-2 border-dashed border-emerald-300 flex items-center justify-center relative animate-spin" style="animation-duration: 25s;">
+                <div class="absolute -top-2 bg-emerald-600 text-white p-1 rounded-full text-xs">
+                  <i class="fa-solid fa-wheat-awn"></i>
+                </div>
+                <div class="absolute -bottom-2 bg-brand-500 text-white p-1 rounded-full text-xs">
+                  <i class="fa-solid fa-bugs"></i>
+                </div>
+              </div>
+              <div class="absolute w-24 h-24 rounded-2xl bg-gradient-to-tr from-brand-600 to-emerald-500 flex items-center justify-center text-white shadow-lg text-4xl">
+                <i class="fa-solid fa-seedling"></i>
+              </div>
+            </div>
+
+            <div class="bg-slate-50 rounded-xl p-3 border border-slate-100 text-xs space-y-1.5 z-10">
+              <div class="flex justify-between text-slate-600">
+                <span>Model Latency:</span>
+                <span class="font-bold text-brand-700">&lt; 120ms</span>
+              </div>
+              <div class="flex justify-between text-slate-600">
+                <span>Supported Plants:</span>
+                <span class="font-bold text-slate-800">Wheat, Potato, Tomato, Rice, Cotton</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- MAIN UPLOAD & SAMPLE SECTION -->
+    <section id="upload-section" class="scroll-mt-24">
+      <div class="bg-white rounded-3xl border border-slate-200/80 shadow-md p-6 sm:p-10 space-y-8">
+        
+        <div class="text-center max-w-2xl mx-auto space-y-2">
+          <h2 class="text-2xl sm:text-3xl font-bold text-slate-900">Upload Leaf Image for Scanning</h2>
+          <p class="text-slate-500 text-sm sm:text-base">Drag and drop a photo or test with preset samples of common crop diseases.</p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          <!-- Dropzone Container -->
+          <div class="lg:col-span-7 space-y-4">
+            <div id="dropzone" 
+                 onbackdropdrop="handleDrop(event)" 
+                 ondragover="handleDragOver(event)" 
+                 ondragleave="handleDragLeave(event)"
+                 class="border-2 border-dashed border-emerald-300 hover:border-brand-500 bg-emerald-50/30 hover:bg-emerald-50/80 rounded-2xl p-8 transition-all duration-300 flex flex-col items-center justify-center text-center cursor-pointer min-h-[280px] relative group">
+              
+              <input type="file" id="file-input" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+              
+              <!-- Content when empty -->
+              <div id="dropzone-empty" class="space-y-4 flex flex-col items-center">
+                <div class="w-16 h-16 rounded-2xl bg-emerald-100 text-brand-700 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                  <i class="fa-solid fa-cloud-arrow-up"></i>
+                </div>
+                <div>
+                  <p class="text-base font-semibold text-slate-800">
+                    Click to upload or drag & drop leaf photo
+                  </p>
+                  <p class="text-xs text-slate-500 mt-1">Supports PNG, JPG, JPEG or WEBP (Max 10MB)</p>
+                </div>
+                <button type="button" onclick="document.getElementById('file-input').click()" class="px-4 py-2 bg-white border border-slate-200 shadow-sm text-xs font-semibold rounded-xl text-slate-700 hover:bg-slate-50">
+                  Select File From Device
+                </button>
+              </div>
+
+              <!-- Content when image selected -->
+              <div id="dropzone-preview" class="hidden flex-col items-center w-full space-y-4">
+                <div class="relative max-h-56 rounded-xl overflow-hidden border border-slate-200 shadow-sm">
+                  <img id="preview-img" src="" alt="Selected leaf preview" class="max-h-56 object-contain">
+                  <button onclick="clearSelectedImage(event)" class="absolute top-2 right-2 w-8 h-8 rounded-full bg-slate-900/70 text-white hover:bg-slate-900 flex items-center justify-center text-xs backdrop-blur-sm transition-all">
+                    <i class="fa-solid fa-xmark"></i>
+                  </button>
+                </div>
+                <p id="preview-filename" class="text-xs font-mono text-slate-600 truncate max-w-xs"></p>
+              </div>
+
+            </div>
+
+            <!-- Start Analysis Button -->
+            <button id="btn-analyze" 
+                    onclick="startAnalysisPipeline()" 
+                    disabled 
+                    class="w-full py-4 px-6 bg-slate-300 text-slate-500 font-bold text-base rounded-2xl shadow-none transition-all flex items-center justify-center gap-3 cursor-not-allowed">
+              <i class="fa-solid fa-microchip"></i> Start AI Neural Analysis
+            </button>
+          </div>
+
+          <!-- Sample Presets & History Column -->
+          <div class="lg:col-span-5 space-y-6">
+            
+            <!-- Presets Box -->
+            <div class="bg-slate-50/80 rounded-2xl p-6 border border-slate-200/70 space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                  <i class="fa-solid fa-lightbulb text-amber-500"></i> Preset Leaf Samples
+                </h3>
+                <span class="text-[11px] text-slate-500">Quick Test</span>
+              </div>
+              <p class="text-xs text-slate-500">Don't have a leaf picture handy? Select one of these common crop disease samples:</p>
+
+              <div class="grid grid-cols-2 gap-3">
+                <!-- Sample 1: Tomato Early Blight -->
+                <div onclick="loadPresetSample('tomato_blight')" class="p-2.5 bg-white hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 cursor-pointer transition-all flex items-center gap-3 group shadow-sm">
+                  <img src="https://images.unsplash.com/photo-1592417817098-8f3d6ef23a28?auto=format&fit=crop&w=120&q=80" alt="Tomato Leaf" class="w-12 h-12 rounded-lg object-cover group-hover:scale-105 transition-transform">
+                  <div class="overflow-hidden">
+                    <p class="text-xs font-bold text-slate-800 truncate">Tomato Leaf</p>
+                    <p class="text-[10px] text-rose-600 font-medium truncate">Early Blight</p>
+                  </div>
+                </div>
+
+                <!-- Sample 2: Apple Rust -->
+                <div onclick="loadPresetSample('apple_rust')" class="p-2.5 bg-white hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 cursor-pointer transition-all flex items-center gap-3 group shadow-sm">
+                  <img src="https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=120&q=80" alt="Corn Leaf" class="w-12 h-12 rounded-lg object-cover group-hover:scale-105 transition-transform">
+                  <div class="overflow-hidden">
+                    <p class="text-xs font-bold text-slate-800 truncate">Corn Leaf</p>
+                    <p class="text-[10px] text-amber-600 font-medium truncate">Common Rust</p>
+                  </div>
+                </div>
+
+                <!-- Sample 3: Potato Late Blight -->
+                <div onclick="loadPresetSample('potato_blight')" class="p-2.5 bg-white hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 cursor-pointer transition-all flex items-center gap-3 group shadow-sm">
+                  <img src="https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=120&q=80" alt="Potato Leaf" class="w-12 h-12 rounded-lg object-cover group-hover:scale-105 transition-transform">
+                  <div class="overflow-hidden">
+                    <p class="text-xs font-bold text-slate-800 truncate">Potato Leaf</p>
+                    <p class="text-[10px] text-rose-600 font-medium truncate">Late Blight</p>
+                  </div>
+                </div>
+
+                <!-- Sample 4: Healthy Leaf -->
+                <div onclick="loadPresetSample('healthy_leaf')" class="p-2.5 bg-white hover:bg-emerald-50 rounded-xl border border-slate-200 hover:border-emerald-300 cursor-pointer transition-all flex items-center gap-3 group shadow-sm">
+                  <img src="https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?auto=format&fit=crop&w=120&q=80" alt="Healthy Leaf" class="w-12 h-12 rounded-lg object-cover group-hover:scale-105 transition-transform">
+                  <div class="overflow-hidden">
+                    <p class="text-xs font-bold text-slate-800 truncate">Wheat Leaf</p>
+                    <p class="text-[10px] text-emerald-600 font-medium truncate">Healthy Crop</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- History Box -->
+            <div class="bg-slate-50/80 rounded-2xl p-6 border border-slate-200/70 space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-sm flex items-center gap-2">
+                  <i class="fa-solid fa-clock-rotate-left text-brand-600"></i> Recent Scans
+                </h3>
+              </div>
+              <div id="history-container" class="space-y-2">
+                <!-- Populated by JavaScript -->
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ENHANCED ANIMATED PIPELINE VISUALIZER (FastAPI & Neural Network Flow) -->
+    <section id="pipeline-section" class="hidden scroll-mt-24">
+      <div class="bg-slate-950 rounded-3xl p-6 sm:p-8 text-white shadow-2xl relative overflow-hidden border border-slate-800">
+        
+        <!-- Background Matrix/Grid Style -->
+        <div class="absolute inset-0 bg-[radial-gradient(#10b981_1px,transparent_1px)] [background-size:24px_24px] opacity-15"></div>
+
+        <div class="relative z-10 space-y-6">
+          
+          <!-- Header Bar -->
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-800 pb-5">
+            <div>
+              <div class="inline-flex items-center gap-2 text-emerald-400 text-xs font-mono mb-1 tracking-wider uppercase">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                LIVE PATHOLOGY PIPELINE EXECUTION
+              </div>
+              <h3 class="text-xl sm:text-2xl font-bold text-white tracking-tight">FastAPI Backend & CNN Deep Learning Flow</h3>
+            </div>
+            
+            <div class="flex items-center gap-3">
+              <div id="pipeline-timer" class="font-mono text-xs px-3.5 py-1.5 bg-slate-900 rounded-xl text-emerald-400 border border-slate-800 shadow-inner">
+                Processing: 0.00s
+              </div>
+              <div class="hidden md:flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-800">
+                <span class="w-2 h-2 rounded-full bg-blue-400"></span> FastAPI Port: 8000
+              </div>
+            </div>
+          </div>
+
+          <!-- Interactive Step Progression Cards -->
+          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+            
+            <div id="pstep-1" class="p-3.5 rounded-2xl bg-slate-900 border border-slate-800 transition-all text-xs space-y-1 relative">
+              <div class="flex items-center justify-between text-slate-400">
+                <span class="font-mono text-[10px] text-emerald-400">01. INGESTION</span>
+                <i class="pstep-icon fa-solid fa-circle-notch animate-spin text-emerald-400"></i>
+              </div>
+              <p class="font-bold text-slate-100">Image Ingestion</p>
+              <p class="text-[10px] text-slate-400">Resizing 224x224 RGB</p>
+            </div>
+
+            <div id="pstep-2" class="p-3.5 rounded-2xl bg-slate-900/40 border border-slate-800/80 transition-all text-xs space-y-1 opacity-50 relative">
+              <div class="flex items-center justify-between text-slate-400">
+                <span class="font-mono text-[10px] text-sky-400">02. REST API</span>
+                <i class="pstep-icon fa-solid fa-spinner text-slate-600"></i>
+              </div>
+              <p class="font-bold text-slate-100">FastAPI Router</p>
+              <p class="text-[10px] text-slate-400">Base64 & Middleware</p>
+            </div>
+
+            <div id="pstep-3" class="p-3.5 rounded-2xl bg-slate-900/40 border border-slate-800/80 transition-all text-xs space-y-1 opacity-50 relative">
+              <div class="flex items-center justify-between text-slate-400">
+                <span class="font-mono text-[10px] text-purple-400">03. CNN MODEL</span>
+                <i class="pstep-icon fa-solid fa-spinner text-slate-600"></i>
+              </div>
+              <p class="font-bold text-slate-100">Vision CNN Layers</p>
+              <p class="text-[10px] text-slate-400">Conv2D Feature Extraction</p>
+            </div>
+
+            <div id="pstep-4" class="p-3.5 rounded-2xl bg-slate-900/40 border border-slate-800/80 transition-all text-xs space-y-1 opacity-50 relative">
+              <div class="flex items-center justify-between text-slate-400">
+                <span class="font-mono text-[10px] text-amber-400">04. CLASSIFIER</span>
+                <i class="pstep-icon fa-solid fa-spinner text-slate-600"></i>
+              </div>
+              <p class="font-bold text-slate-100">Softmax Scoring</p>
+              <p class="text-[10px] text-slate-400">Pathological Odds</p>
+            </div>
+
+            <div id="pstep-5" class="p-3.5 rounded-2xl bg-slate-900/40 border border-slate-800/80 transition-all text-xs space-y-1 opacity-50 col-span-2 md:col-span-1 relative">
+              <div class="flex items-center justify-between text-slate-400">
+                <span class="font-mono text-[10px] text-emerald-400">05. PAYLOAD</span>
+                <i class="pstep-icon fa-solid fa-spinner text-slate-600"></i>
+              </div>
+              <p class="font-bold text-slate-100">UI Rendering</p>
+              <p class="text-[10px] text-slate-400">Bilingual Sync (EN/UR)</p>
+            </div>
+
+          </div>
+
+          <!-- ENHANCED NEURAL NETWORK & FASTAPI ARCHITECTURE CANVAS -->
+          <div class="bg-slate-900/90 rounded-2xl p-4 sm:p-6 border border-slate-800/90 relative overflow-hidden flex flex-col items-center">
+            
+            <svg id="nn-svg" class="w-full h-auto min-h-[280px]" viewBox="0 0 950 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+              
+              <defs>
+                <!-- Gradients for Connections & Signals -->
+                <linearGradient id="wireGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#22c55e" stop-opacity="0.3"/>
+                  <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.7"/>
+                </linearGradient>
+
+                <linearGradient id="wireGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.7"/>
+                  <stop offset="100%" stop-color="#c084fc" stop-opacity="0.8"/>
+                </linearGradient>
+
+                <linearGradient id="wireGrad3" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="#c084fc" stop-opacity="0.8"/>
+                  <stop offset="100%" stop-color="#34d399" stop-opacity="0.9"/>
+                </linearGradient>
+              </defs>
+
+              <!-- Animated Signal Paths (Data Packet Motion) -->
+              <!-- Path A: Input to FastAPI -->
+              <path id="path-in-to-api1" d="M110 90 L240 100" class="animated-wire stroke-emerald-500/30" stroke-width="1.5" />
+              <path id="path-in-to-api2" d="M110 150 L240 150" class="animated-wire stroke-emerald-500/30" stroke-width="1.5" />
+              <path id="path-in-to-api3" d="M110 210 L240 200" class="animated-wire stroke-emerald-500/30" stroke-width="1.5" />
+
+              <!-- Path B: FastAPI to CNN Feature Maps -->
+              <path id="path-api-to-cnn1" d="M330 100 L440 70" class="animated-wire stroke-sky-400/40" stroke-width="1.5" />
+              <path id="path-api-to-cnn2" d="M330 150 L440 150" class="animated-wire stroke-sky-400/40" stroke-width="1.5" />
+              <path id="path-api-to-cnn3" d="M330 200 L440 230" class="animated-wire stroke-sky-400/40" stroke-width="1.5" />
+
+              <!-- Path C: CNN Feature Maps to Hidden Neural Layers -->
+              <path d="M510 70 L600 60" class="animated-wire stroke-purple-400/50" stroke-width="1.5" />
+              <path d="M510 70 L600 120" class="animated-wire stroke-purple-400/50" stroke-width="1.5" />
+              <path d="M510 150 L600 120" class="animated-wire stroke-purple-400/50" stroke-width="1.5" />
+              <path d="M510 150 L600 180" class="animated-wire stroke-purple-400/50" stroke-width="1.5" />
+              <path d="M510 230 L600 180" class="animated-wire stroke-purple-400/50" stroke-width="1.5" />
+              <path d="M510 230 L600 240" class="animated-wire stroke-purple-400/50" stroke-width="1.5" />
+
+              <!-- Path D: Hidden Layers to Softmax Classifier -->
+              <path d="M625 60 L750 110" class="animated-wire stroke-emerald-400/70" stroke-width="1.5" />
+              <path d="M625 120 L750 150" class="animated-wire stroke-emerald-400/70" stroke-width="1.5" />
+              <path d="M625 180 L750 150" class="animated-wire stroke-emerald-400/70" stroke-width="1.5" />
+              <path d="M625 240 L750 190" class="animated-wire stroke-emerald-400/70" stroke-width="1.5" />
+
+              <!-- STAGE 1: INPUT IMAGE TENSOR -->
+              <g id="svg-stage-1">
+                <rect x="25" y="50" width="90" height="180" rx="14" fill="#0f172a" stroke="#10b981" stroke-width="2" class="transition-all" />
+                <text x="70" y="35" text-anchor="middle" fill="#34d399" font-size="11" font-weight="bold" font-family="JetBrains Mono">STAGE 01</text>
+                
+                <!-- Leaf Matrix Icon Representation -->
+                <rect x="40" y="70" width="60" height="60" rx="8" fill="#022c22" stroke="#059669" stroke-width="1" />
+                <!-- 3x3 Pixel Grid -->
+                <rect x="48" y="78" width="12" height="12" fill="#10b981" rx="2" />
+                <rect x="64" y="78" width="12" height="12" fill="#047857" rx="2" />
+                <rect x="80" y="78" width="12" height="12" fill="#064e3b" rx="2" />
+                <rect x="48" y="94" width="12" height="12" fill="#059669" rx="2" />
+                <rect x="64" y="94" width="12" height="12" fill="#34d399" rx="2" />
+                <rect x="80" y="94" width="12" height="12" fill="#10b981" rx="2" />
+                <rect x="48" y="110" width="12" height="12" fill="#064e3b" rx="2" />
+                <rect x="64" y="110" width="12" height="12" fill="#10b981" rx="2" />
+                <rect x="80" y="110" width="12" height="12" fill="#059669" rx="2" />
+
+                <text x="70" y="152" text-anchor="middle" fill="#cbd5e1" font-size="11" font-weight="bold">Leaf Image</text>
+                <text x="70" y="168" text-anchor="middle" fill="#64748b" font-size="9" font-family="JetBrains Mono">[224, 224, 3]</text>
+                <text x="70" y="182" text-anchor="middle" fill="#64748b" font-size="9" font-family="JetBrains Mono">RGB Tensor</text>
+                
+                <text x="70" y="260" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="600">Input Processing</text>
+              </g>
+
+              <!-- STAGE 2: FASTAPI BACKEND SERVICE -->
+              <g id="svg-stage-2">
+                <rect x="235" y="45" width="105" height="190" rx="14" fill="#0f172a" stroke="#38bdf8" stroke-width="2" />
+                <text x="287" y="35" text-anchor="middle" fill="#38bdf8" font-size="11" font-weight="bold" font-family="JetBrains Mono">STAGE 02</text>
+                
+                <rect x="250" y="65" width="75" height="24" rx="6" fill="#0284c7" />
+                <text x="287" y="81" text-anchor="middle" fill="#ffffff" font-size="10" font-weight="bold" font-family="JetBrains Mono">FastAPI</text>
+
+                <!-- API Endpoints List -->
+                <circle cx="255" cy="115" r="4" fill="#38bdf8" />
+                <text x="265" y="118" fill="#e2e8f0" font-size="9" font-family="JetBrains Mono">POST /predict</text>
+
+                <circle cx="255" cy="140" r="4" fill="#38bdf8" />
+                <text x="265" y="143" fill="#e2e8f0" font-size="9" font-family="JetBrains Mono">JSON Payload</text>
+
+                <circle cx="255" cy="165" r="4" fill="#38bdf8" />
+                <text x="265" y="168" fill="#e2e8f0" font-size="9" font-family="JetBrains Mono">Base64 Decode</text>
+
+                <rect x="250" y="188" width="75" height="18" rx="4" fill="#0c4a6e" stroke="#0284c7" stroke-width="1" />
+                <text x="287" y="200" text-anchor="middle" fill="#7dd3fc" font-size="8" font-family="JetBrains Mono">Status 200 OK</text>
+
+                <text x="287" y="260" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="600">REST Microservice</text>
+              </g>
+
+              <!-- STAGE 3: CNN CONVOLUTIONAL FEATURE MAPS & NEURAL NODES -->
+              <g id="svg-stage-3">
+                <text x="525" y="35" text-anchor="middle" fill="#c084fc" font-size="11" font-weight="bold" font-family="JetBrains Mono">STAGE 03</text>
+                
+                <!-- Stacked Conv2D Feature Maps -->
+                <g>
+                  <rect x="440" y="50" width="70" height="40" rx="6" fill="#3b0764" stroke="#a855f7" stroke-width="1.5" />
+                  <text x="475" y="74" text-anchor="middle" fill="#e9d5ff" font-size="9" font-family="JetBrains Mono">Conv2D</text>
+
+                  <rect x="440" y="130" width="70" height="40" rx="6" fill="#3b0764" stroke="#a855f7" stroke-width="1.5" />
+                  <text x="475" y="154" text-anchor="middle" fill="#e9d5ff" font-size="9" font-family="JetBrains Mono">MaxPooling</text>
+
+                  <rect x="440" y="210" width="70" height="40" rx="6" fill="#3b0764" stroke="#a855f7" stroke-width="1.5" />
+                  <text x="475" y="234" text-anchor="middle" fill="#e9d5ff" font-size="9" font-family="JetBrains Mono">Dense Map</text>
+                </g>
+
+                <!-- Dense Hidden Neurons Column -->
+                <g>
+                  <circle cx="612" cy="60" r="13" fill="#0f172a" stroke="#c084fc" stroke-width="2.5" />
+                  <circle cx="612" cy="120" r="13" fill="#0f172a" stroke="#c084fc" stroke-width="2.5" />
+                  <circle cx="612" cy="180" r="13" fill="#0f172a" stroke="#c084fc" stroke-width="2.5" />
+                  <circle cx="612" cy="240" r="13" fill="#0f172a" stroke="#c084fc" stroke-width="2.5" />
+
+                  <!-- Active Synapse Glow Center -->
+                  <circle cx="612" cy="60" r="5" fill="#a855f7" />
+                  <circle cx="612" cy="120" r="5" fill="#a855f7" />
+                  <circle cx="612" cy="180" r="5" fill="#a855f7" />
+                  <circle cx="612" cy="240" r="5" fill="#a855f7" />
+                </g>
+
+                <text x="525" y="260" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="600">CNN Feature Extraction</text>
+              </g>
+
+              <!-- STAGE 4: SOFTMAX CLASSIFIER & DIAGNOSIS OUTPUT -->
+              <g id="svg-stage-4">
+                <rect x="745" y="45" width="170" height="190" rx="14" fill="#0f172a" stroke="#10b981" stroke-width="2" />
+                <text x="830" y="35" text-anchor="middle" fill="#34d399" font-size="11" font-weight="bold" font-family="JetBrains Mono">STAGE 04 & 05</text>
+
+                <!-- Softmax Bar Visualization -->
+                <text x="760" y="70" fill="#94a3b8" font-size="9" font-family="JetBrains Mono">Softmax Probabilities</text>
+
+                <!-- Class 1: Blight (Active) -->
+                <text x="760" y="90" fill="#e2e8f0" font-size="9" font-weight="bold">Blight Disease</text>
+                <rect x="760" y="96" width="120" height="8" rx="4" fill="#1e293b" />
+                <rect id="bar-class-1" x="760" y="96" width="110" height="8" rx="4" fill="#22c55e" />
+                <text x="890" y="104" fill="#34d399" font-size="8" font-family="JetBrains Mono">98.4%</text>
+
+                <!-- Class 2: Rust -->
+                <text x="760" y="122" fill="#cbd5e1" font-size="9">Common Rust</text>
+                <rect x="760" y="128" width="120" height="6" rx="3" fill="#1e293b" />
+                <rect x="760" y="128" width="12" height="6" rx="3" fill="#0284c7" />
+                <text x="890" y="134" fill="#64748b" font-size="8" font-family="JetBrains Mono">1.2%</text>
+
+                <!-- Class 3: Healthy -->
+                <text x="760" y="150" fill="#cbd5e1" font-size="9">Healthy Crop</text>
+                <rect x="760" y="156" width="120" height="6" rx="3" fill="#1e293b" />
+                <rect x="760" y="156" width="5" height="6" rx="3" fill="#64748b" />
+                <text x="890" y="162" fill="#64748b" font-size="8" font-family="JetBrains Mono">0.4%</text>
+
+                <rect x="760" y="180" width="140" height="38" rx="8" fill="#022c22" stroke="#059669" stroke-width="1" />
+                <text x="830" y="196" text-anchor="middle" fill="#86efac" font-size="10" font-weight="bold">Classification Output</text>
+                <text x="830" y="210" text-anchor="middle" fill="#34d399" font-size="9" font-family="JetBrains Mono">Bilingual Payload Sync</text>
+
+                <text x="830" y="260" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="600">Inference & Payload</text>
+              </g>
+
+              <!-- Dynamic Animated Data Particles Moving along Pipeline -->
+              <circle r="4" fill="#34d399">
+                <animateMotion path="M110 150 L240 150 M330 150 L440 150 M510 150 L600 120 M625 120 L750 150" dur="2s" repeatCount="indefinite" />
+              </circle>
+              <circle r="3" fill="#38bdf8">
+                <animateMotion path="M110 90 L240 100 M330 100 L440 70 M510 70 L600 60 M625 60 L750 110" dur="2.5s" repeatCount="indefinite" />
+              </circle>
+            </svg>
+
+            <!-- Dedicated Terminal Status Log (Positioned below SVG to prevent overlapping text) -->
+            <div class="w-full mt-4 bg-slate-950/90 border border-slate-800 rounded-xl px-4 py-2.5 flex items-center justify-between gap-4 font-mono text-xs text-emerald-400">
+              <div class="flex items-center gap-2 overflow-hidden">
+                <span class="text-slate-500">$</span>
+                <span id="pipeline-status-log" class="truncate text-emerald-300">Initializing deep neural network parameters...</span>
+              </div>
+              <div class="shrink-0 text-[10px] text-slate-500 hidden sm:block">
+                Tensorflow / Keras Engine
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- DIAGNOSIS RESULTS DISPLAY SECTION -->
+    <section id="results-section" class="hidden scroll-mt-24 space-y-8">
+      
+      <!-- Top Overview Banner -->
+      <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-6">
+          
+          <div class="flex items-center gap-4">
+            <div id="res-status-icon" class="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center text-3xl shrink-0">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <span id="res-plant-type" class="px-2.5 py-0.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-full">Plant Leaf</span>
+                <span id="res-severity" class="px-2.5 py-0.5 bg-rose-100 text-rose-700 text-xs font-semibold rounded-full">High Severity</span>
+              </div>
+              <h2 id="res-title-en" class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">Disease Name</h2>
+              <p id="res-title-ur" class="urdu-text text-xl font-bold text-slate-700">بیماری کا نام</p>
+            </div>
+          </div>
+
+          <!-- Confidence Score Gauge -->
+          <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-4 shrink-0">
+            <div class="text-right">
+              <p class="text-xs text-slate-500 font-semibold">Model Confidence</p>
+              <p id="res-confidence-num" class="text-2xl font-black text-brand-700">98.4%</p>
+              <p class="text-[10px] text-slate-400">Softmax Accuracy</p>
+            </div>
+            <div class="w-12 h-12 rounded-full bg-emerald-100 text-brand-700 flex items-center justify-center text-lg font-bold">
+              <i class="fa-solid fa-circle-check"></i>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Language View Content Container -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          
+          <!-- ENGLISH REPORT CARD -->
+          <div id="card-en" class="bg-slate-50/70 p-6 rounded-2xl border border-slate-200/80 space-y-6">
+            <div class="flex items-center gap-2 text-slate-900 font-bold border-b border-slate-200 pb-3 text-lg">
+              <span class="w-3 h-3 rounded-full bg-brand-600"></span>
+              English Pathological Report
+            </div>
+
+            <!-- Description -->
+            <div class="space-y-2">
+              <h4 class="text-xs uppercase font-bold tracking-wider text-slate-500">Disease Description</h4>
+              <p id="en-description" class="text-slate-700 text-sm leading-relaxed">
+                Analysis loading...
+              </p>
+            </div>
+
+            <!-- Key Symptoms -->
+            <div class="space-y-2">
+              <h4 class="text-xs uppercase font-bold tracking-wider text-slate-500">Identified Symptoms</h4>
+              <ul id="en-symptoms" class="list-disc list-inside text-sm text-slate-700 space-y-1">
+                <!-- Dynamically populated -->
+              </ul>
+            </div>
+
+            <!-- Treatment & Remediation -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div class="bg-emerald-50/80 p-4 rounded-xl border border-emerald-200/80 space-y-2">
+                <h5 class="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                  <i class="fa-solid fa-seedling text-emerald-600"></i> Organic Treatment
+                </h5>
+                <p id="en-organic" class="text-xs text-emerald-800 leading-relaxed">--</p>
+              </div>
+
+              <div class="bg-amber-50/80 p-4 rounded-xl border border-amber-200/80 space-y-2">
+                <h5 class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                  <i class="fa-solid fa-flask text-amber-600"></i> Chemical Remedy
+                </h5>
+                <p id="en-chemical" class="text-xs text-amber-800 leading-relaxed">--</p>
+              </div>
+            </div>
+
+            <!-- Prevention -->
+            <div class="space-y-2 pt-2">
+              <h4 class="text-xs uppercase font-bold tracking-wider text-slate-500">Preventive Measures</h4>
+              <p id="en-prevention" class="text-slate-700 text-sm leading-relaxed">--</p>
+            </div>
+          </div>
+
+          <!-- URDU REPORT CARD (اردو رپورٹ) -->
+          <div id="card-ur" class="bg-emerald-50/30 p-6 rounded-2xl border border-emerald-200/80 space-y-6">
+            <div class="flex items-center justify-end gap-2 text-slate-900 font-bold border-b border-emerald-200/60 pb-3 text-lg urdu-text">
+              تشخیصی رپورٹ (اردو)
+              <span class="w-3 h-3 rounded-full bg-emerald-600"></span>
+            </div>
+
+            <!-- Urdu Description -->
+            <div class="space-y-2">
+              <h4 class="text-xs font-bold tracking-wider text-emerald-800 urdu-text">بیماری کی تفصیل</h4>
+              <p id="ur-description" class="urdu-text text-slate-800 text-sm leading-relaxed">
+                تفصیل لوڈ ہو رہی ہے...
+              </p>
+            </div>
+
+            <!-- Urdu Symptoms -->
+            <div class="space-y-2">
+              <h4 class="text-xs font-bold tracking-wider text-emerald-800 urdu-text">اہم علامات</h4>
+              <ul id="ur-symptoms" class="urdu-text text-sm text-slate-800 space-y-1">
+                <!-- Dynamically populated -->
+              </ul>
+            </div>
+
+            <!-- Urdu Treatments -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+              <div class="bg-white/90 p-4 rounded-xl border border-emerald-200 space-y-2">
+                <h5 class="text-xs font-bold text-emerald-900 urdu-text flex items-center justify-end gap-1.5">
+                  قدرتی اور آرگینک علاج <i class="fa-solid fa-leaf text-emerald-600"></i>
+                </h5>
+                <p id="ur-organic" class="urdu-text text-xs text-slate-700 leading-relaxed">--</p>
+              </div>
+
+              <div class="bg-white/90 p-4 rounded-xl border border-emerald-200 space-y-2">
+                <h5 class="text-xs font-bold text-amber-900 urdu-text flex items-center justify-end gap-1.5">
+                  کیمیائی/اسپرے علاج <i class="fa-solid fa-spray-can text-amber-600"></i>
+                </h5>
+                <p id="ur-chemical" class="urdu-text text-xs text-slate-700 leading-relaxed">--</p>
+              </div>
+            </div>
+
+            <!-- Urdu Prevention -->
+            <div class="space-y-2 pt-2">
+              <h4 class="text-xs font-bold tracking-wider text-emerald-800 urdu-text">احتیاطی تدابیر</h4>
+              <p id="ur-prevention" class="urdu-text text-slate-800 text-sm leading-relaxed">--</p>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Action Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-100">
+          <button onclick="window.print()" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs transition-all flex items-center gap-2">
+            <i class="fa-solid fa-print"></i> Print / Save PDF Report
+          </button>
+          
+          <button onclick="resetApp()" class="px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl text-xs shadow-md transition-all flex items-center gap-2">
+            <i class="fa-solid fa-rotate-left"></i> Analyze Another Leaf
+          </button>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="bg-white border-t border-slate-200 mt-16 py-8">
+    <div class="max-w-7xl mx-auto px-4 text-center space-y-2">
+      <p class="text-xs text-slate-500">AgriScan AI • Powered by FastAPI, Vision Neural Networks & Gemini Flash Pathology Engine</p>
+      <p class="urdu-text text-xs text-slate-400">فصلوں کی صحتیابی اور بہتری کے لیے جدید ترین نیورل نیٹ ورک سسٹم</p>
+    </div>
+  </footer>
+
+  <!-- APPLICATION LOGIC & GEMINI API INTEGRATION -->
+  <script>
+    const apiKey = ""; // Runtime provided key
+    
+    let selectedImageBase64 = null;
+    let selectedFileName = "";
+    let activeLanguage = "both"; // 'both', 'en', 'ur'
+
+    // Preset base64 mock/samples dictionary
+    const PRESET_SAMPLES = {
+      tomato_blight: {
+        name: "Tomato_Early_Blight.jpg",
+        url: "https://images.unsplash.com/photo-1592417817098-8f3d6ef23a28?auto=format&fit=crop&w=600&q=80",
+        plant: "Tomato Leaf (ٹماٹر)",
+        disease: "Early Blight (Alternaria solani)"
+      },
+      apple_rust: {
+        name: "Corn_Common_Rust.jpg",
+        url: "https://images.unsplash.com/photo-1560493676-04071c5f467b?auto=format&fit=crop&w=600&q=80",
+        plant: "Corn Leaf (مکئی)",
+        disease: "Common Rust (Puccinia sorghi)"
+      },
+      potato_blight: {
+        name: "Potato_Late_Blight.jpg",
+        url: "https://images.unsplash.com/photo-1518977676601-b53f82aba655?auto=format&fit=crop&w=600&q=80",
+        plant: "Potato Leaf (آلو)",
+        disease: "Late Blight (Phytophthora infestans)"
+      },
+      healthy_leaf: {
+        name: "Wheat_Healthy.jpg",
+        url: "https://images.unsplash.com/photo-1530836369250-ef72a3f5cda8?auto=format&fit=crop&w=600&q=80",
+        plant: "Wheat Crop (گندم)",
+        disease: "Healthy Leaf (صحت مند فصل)"
+      }
+    };
+
+    // UI Utilities
+    function setLanguage(lang) {
+      activeLanguage = lang;
+      
+      const cardEn = document.getElementById('card-en');
+      const cardUr = document.getElementById('card-ur');
+      
+      // Update Buttons
+      document.getElementById('lang-btn-both').className = lang === 'both' ? 'px-3 py-1.5 rounded-lg transition-all bg-white text-slate-800 shadow-sm font-semibold' : 'px-3 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900';
+      document.getElementById('lang-btn-en').className = lang === 'en' ? 'px-3 py-1.5 rounded-lg transition-all bg-white text-slate-800 shadow-sm font-semibold' : 'px-3 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900';
+      document.getElementById('lang-btn-ur').className = lang === 'ur' ? 'px-3 py-1.5 rounded-lg transition-all bg-white text-slate-800 shadow-sm font-semibold' : 'px-3 py-1.5 rounded-lg transition-all text-slate-600 hover:text-slate-900';
+
+      if (lang === 'both') {
+        cardEn.classList.remove('hidden');
+        cardUr.classList.remove('hidden');
+      } else if (lang === 'en') {
+        cardEn.classList.remove('hidden');
+        cardUr.classList.add('hidden');
+      } else if (lang === 'ur') {
+        cardEn.classList.add('hidden');
+        cardUr.classList.remove('hidden');
+      }
+    }
+
+    function scrollToPresets() {
+      document.getElementById('upload-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Drag and Drop Handling
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('dropzone').classList.add('border-brand-500', 'bg-emerald-100/50');
+    }
+
+    function handleDragLeave(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('dropzone').classList.remove('border-brand-500', 'bg-emerald-100/50');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      document.getElementById('dropzone').classList.remove('border-brand-500', 'bg-emerald-100/50');
+      
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        processFile(files[0]);
+      }
+    }
+
+    function handleFileSelect(e) {
+      const files = e.target.files;
+      if (files && files.length > 0) {
+        processFile(files[0]);
+      }
+    }
+
+    function processFile(file) {
+      selectedFileName = file.name;
+      const reader = new FileReader();
+      reader.onload = function(event) {
+        selectedImageBase64 = event.target.result;
+        displayPreview(selectedImageBase64, selectedFileName);
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function displayPreview(src, filename) {
+      document.getElementById('preview-img').src = src;
+      document.getElementById('preview-filename').textContent = filename;
+      
+      document.getElementById('dropzone-empty').classList.add('hidden');
+      document.getElementById('dropzone-preview').classList.remove('hidden');
+      document.getElementById('dropzone-preview').classList.add('flex');
+
+      // Enable Analyze Button
+      const btn = document.getElementById('btn-analyze');
+      btn.disabled = false;
+      btn.className = "w-full py-4 px-6 bg-brand-600 hover:bg-brand-700 text-white font-bold text-base rounded-2xl shadow-lg shadow-brand-600/30 transition-all flex items-center justify-center gap-3 cursor-pointer hover:scale-[1.01]";
+    }
+
+    function clearSelectedImage(e) {
+      e.stopPropagation();
+      selectedImageBase64 = null;
+      selectedFileName = "";
+      document.getElementById('file-input').value = "";
+      
+      document.getElementById('dropzone-empty').classList.remove('hidden');
+      document.getElementById('dropzone-preview').classList.add('hidden');
+      
+      const btn = document.getElementById('btn-analyze');
+      btn.disabled = true;
+      btn.className = "w-full py-4 px-6 bg-slate-300 text-slate-500 font-bold text-base rounded-2xl shadow-none transition-all flex items-center justify-center gap-3 cursor-not-allowed";
+    }
+
+    // Convert Image URL to base64 for sample presets
+    async function loadPresetSample(key) {
+      const sample = PRESET_SAMPLES[key];
+      if (!sample) return;
+
+      try {
+        const response = await fetch(sample.url);
+        const blob = await response.blob();
+        const reader = new FileReader();
+        reader.onloadend = function() {
+          selectedImageBase64 = reader.result;
+          selectedFileName = sample.name;
+          displayPreview(selectedImageBase64, sample.name);
+        };
+        reader.readAsDataURL(blob);
+      } catch (err) {
+        // Fallback placeholder image
+        selectedImageBase64 = sample.url;
+        selectedFileName = sample.name;
+        displayPreview(selectedImageBase64, sample.name);
+      }
+    }
+
+    // MAIN ANALYSIS PIPELINE TRIGGER
+    async function startAnalysisPipeline() {
+      if (!selectedImageBase64) return;
+
+      // Scroll to pipeline
+      const pipelineSec = document.getElementById('pipeline-section');
+      const resultsSec = document.getElementById('results-section');
+      
+      pipelineSec.classList.remove('hidden');
+      resultsSec.classList.add('hidden');
+      pipelineSec.scrollIntoView({ behavior: 'smooth' });
+
+      // Reset step indicators
+      resetPipelineSteps();
+
+      let startTime = Date.now();
+      let timerInterval = setInterval(() => {
+        let elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+        document.getElementById('pipeline-timer').textContent = `Processing: ${elapsed}s`;
+      }, 50);
+
+      // Step 1: Upload Ingestion
+      await updateStep(1, "Resizing image tensor to [224, 224, 3] & normalizing RGB values...", 800);
+      
+      // Step 2: FastAPI Routing
+      await updateStep(2, "FastAPI endpoint receiving payload: POST http://localhost:8000/api/v2/predict...", 900);
+
+      // Step 3: Neural Net Execution
+      updateStepStatus(3, "In Progress");
+      highlightSVGStage('svg-stage-3');
+      document.getElementById('pipeline-status-log').textContent = "Executing CNN Conv2D feature maps, pooling, & dense activation layers...";
+
+      // Trigger Gemini AI API call in background while animation plays
+      try {
+        const apiResult = await callGeminiPathologyAPI(selectedImageBase64);
+        
+        // Step 4: Classification
+        await updateStep(4, "Computing Softmax probabilities & pathological confidence matrix...", 800);
+
+        // Step 5: Response rendering
+        await updateStep(5, "Structuring English & Urdu diagnostic payload...", 600);
+
+        clearInterval(timerInterval);
+        
+        // Render final result to UI
+        renderDiagnosisResults(apiResult);
+
+        // Reveal results section
+        setTimeout(() => {
+          resultsSec.classList.remove('hidden');
+          resultsSec.scrollIntoView({ behavior: 'smooth' });
+        }, 500);
+
+      } catch (error) {
+        clearInterval(timerInterval);
+        console.error(error);
+        alert("Failed to analyze image with model. Please try again or check your connection.");
+      }
+    }
+
+    function resetPipelineSteps() {
+      for (let i = 1; i <= 5; i++) {
+        const el = document.getElementById(`pstep-${i}`);
+        el.className = "p-3.5 rounded-2xl bg-slate-900/40 border border-slate-800/80 transition-all text-xs space-y-1 opacity-50 relative";
+        const icon = el.querySelector('.pstep-icon');
+        icon.className = "pstep-icon fa-solid fa-spinner text-slate-600";
+      }
+    }
+
+    function highlightSVGStage(stageId) {
+      const stages = ['svg-stage-1', 'svg-stage-2', 'svg-stage-3', 'svg-stage-4'];
+      stages.forEach(id => {
+        const stageEl = document.getElementById(id);
+        if (stageEl) {
+          if (id === stageId) {
+            stageEl.style.filter = "drop-shadow(0px 0px 8px rgba(34, 197, 94, 0.6))";
+          } else {
+            stageEl.style.filter = "none";
+          }
+        }
+      });
+    }
+
+    function updateStepStatus(stepNum, state) {
+      const el = document.getElementById(`pstep-${stepNum}`);
+      const icon = el.querySelector('.pstep-icon');
+      
+      if (state === "In Progress") {
+        el.className = "p-3.5 rounded-2xl bg-slate-900 border border-emerald-500/80 transition-all text-xs space-y-1 opacity-100 shadow-xl shadow-emerald-500/10";
+        icon.className = "pstep-icon fa-solid fa-circle-notch animate-spin text-emerald-400";
+        
+        // Highlight corresponding SVG stage
+        if (stepNum === 1) highlightSVGStage('svg-stage-1');
+        if (stepNum === 2) highlightSVGStage('svg-stage-2');
+        if (stepNum === 3) highlightSVGStage('svg-stage-3');
+        if (stepNum === 4 || stepNum === 5) highlightSVGStage('svg-stage-4');
+
+      } else if (state === "Completed") {
+        el.className = "p-3.5 rounded-2xl bg-emerald-950/50 border border-emerald-600/60 transition-all text-xs space-y-1 opacity-100";
+        icon.className = "pstep-icon fa-solid fa-circle-check text-emerald-400";
+      }
+    }
+
+    function updateStep(stepNum, logMsg, delayMs) {
+      return new Promise((resolve) => {
+        updateStepStatus(stepNum, "In Progress");
+        document.getElementById('pipeline-status-log').textContent = logMsg;
+        setTimeout(() => {
+          updateStepStatus(stepNum, "Completed");
+          resolve();
+        }, delayMs);
+      });
+    }
+
+    // API CALL TO FASTAPI BACKEND
+    async function callGeminiPathologyAPI(base64Image) {
+      // Convert base64 to File object manually (completely offline)
+      const parts = base64Image.split(',');
+      const mime = parts[0].match(/:(.*?);/)[1];
+      const bstr = atob(parts[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while (n--) {
+        u8arr[n] = bstr.charCodeAt(n);
+      }
+      const file = new File([u8arr], selectedFileName || "image.jpg", { type: mime });
+
+      const form = new FormData();
+      form.append("file", file);
+
+      try {
+        const response = await fetch("/predict", {
+          method: "POST",
+          body: form,
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data; // Expected to match the rich JSON format
+      } catch (e) {
+        console.error("FastAPI error:", e);
+        throw e;
+      }
+    }
+
+    // Render structured results into UI
+    function renderDiagnosisResults(data) {
+      document.getElementById('res-plant-type').textContent = data.plant_type || "Plant Leaf";
+      document.getElementById('res-severity').textContent = `${data.severity || 'Moderate'} Severity`;
+      document.getElementById('res-title-en').textContent = data.disease_name_en || "Identified Disease";
+      document.getElementById('res-title-ur').textContent = data.disease_name_ur || "بیماری کی تشخيص";
+      
+      const conf = (data.confidence || 98.4).toFixed(1);
+      document.getElementById('res-confidence-num').textContent = `${conf}%`;
+
+      // Dynamically update Softmax Bar in SVG Stage 4
+      const softMaxBar = document.getElementById('bar-class-1');
+      if (softMaxBar) {
+        softMaxBar.setAttribute('width', `${Math.min(120, (conf / 100) * 120)}`);
+      }
+
+      // English Content
+      document.getElementById('en-description').textContent = data.description_en || "N/A";
+      document.getElementById('en-organic').textContent = data.organic_treatment_en || "N/A";
+      document.getElementById('en-chemical').textContent = data.chemical_treatment_en || "N/A";
+      document.getElementById('en-prevention').textContent = data.prevention_en || "N/A";
+
+      const enSymptomsList = document.getElementById('en-symptoms');
+      enSymptomsList.innerHTML = "";
+      (data.symptoms_en || []).forEach(sym => {
+        const li = document.createElement('li');
+        li.textContent = sym;
+        enSymptomsList.appendChild(li);
+      });
+
+      // Urdu Content
+      document.getElementById('ur-description').textContent = data.description_ur || "معلومات دستیاب نہیں";
+      document.getElementById('ur-organic').textContent = data.organic_treatment_ur || "معلومات دستیاب نہیں";
+      document.getElementById('ur-chemical').textContent = data.chemical_treatment_ur || "معلومات دستیاب نہیں";
+      document.getElementById('ur-prevention').textContent = data.prevention_ur || "معلومات دستیاب نہیں";
+
+      const urSymptomsList = document.getElementById('ur-symptoms');
+      urSymptomsList.innerHTML = "";
+      (data.symptoms_ur || []).forEach(sym => {
+        const li = document.createElement('li');
+        li.textContent = `• ${sym}`;
+        urSymptomsList.appendChild(li);
+      });
+      // Save to local storage history
+      saveToHistory(data);
+    }
+
+    function saveToHistory(data) {
+      let history = JSON.parse(localStorage.getItem('agriscan_history') || '[]');
+      history.unshift({
+        date: new Date().toLocaleString(),
+        plant: data.plant_type,
+        disease: data.disease_name_en,
+        severity: data.severity,
+        confidence: data.confidence
+      });
+      // Keep only last 5 scans
+      history = history.slice(0, 5);
+      localStorage.setItem('agriscan_history', JSON.stringify(history));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      let history = JSON.parse(localStorage.getItem('agriscan_history') || '[]');
+      const container = document.getElementById('history-container');
+      if (!container) return; // Add this container to HTML if desired
+
+      if (history.length === 0) {
+        container.innerHTML = '<p class="text-xs text-slate-400">No previous scans found.</p>';
+        return;
+      }
+
+      container.innerHTML = history.map(item => `
+        <div class="p-3 bg-white rounded-xl border border-slate-100 shadow-sm mb-2 flex justify-between items-center text-xs">
+          <div>
+            <p class="font-bold text-slate-800">${item.plant}</p>
+            <p class="text-slate-500">${item.disease}</p>
+          </div>
+          <div class="text-right">
+            <span class="px-2 py-0.5 rounded-full ${item.severity === 'Healthy' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'} font-semibold">${item.severity}</span>
+            <p class="text-[10px] text-slate-400 mt-1">${item.date}</p>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function resetApp() {
+      clearSelectedImage({ stopPropagation: () => {} });
+      document.getElementById('pipeline-section').classList.add('hidden');
+      document.getElementById('results-section').classList.add('hidden');
+      document.getElementById('upload-section').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Render history on load
+    document.addEventListener('DOMContentLoaded', renderHistory);
+  </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/predict",
+      "destination": "https://YOUR_RAILWAY_URL_HERE/predict"
+    }
+  ]
+}
