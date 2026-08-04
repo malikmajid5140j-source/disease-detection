@@ -97,7 +97,7 @@ class PlantDiseaseModel:
     def load(self) -> None:
         """Load the PyTorch state dictionary."""
         self._model = CustomCNN(num_classes=self.num_classes).to(self.device)
-        state_dict = torch.load(self.pt_path, map_location=self.device)
+        state_dict = torch.load(self.pt_path, map_location=self.device, weights_only=False)
         
         # Load weights
         self._model.load_state_dict(state_dict)
