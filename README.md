@@ -1,5 +1,7 @@
 # 🌱 AgriScan AI - Crop Disease Detection
 
+**🌍 Live Demo:** [https://disease-detection-lilac.vercel.app/](https://disease-detection-lilac.vercel.app/)
+
 > **An advanced, full-stack AI application that detects crop diseases using a custom PyTorch Convolutional Neural Network (CNN) and provides instant bilingual (English & Urdu) organic and chemical treatment recommendations.**
 
 ![Hero Section](./screenshots/hero.png)

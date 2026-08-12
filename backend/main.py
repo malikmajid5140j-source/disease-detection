@@ -121,6 +121,28 @@ async def predict(file: UploadFile = File(...)):
     top = predictions[0]
 
     label = top["label"]
+    confidence = top["confidence"]
+    
+    # Check if prediction is unreliable (low confidence) or if it's explicitly classified as background
+    if confidence < 0.5 or label == "Background_without_leaves":
+        response_data = {
+            "plant_type": "Unknown",
+            "disease_name_en": "Unrecognized / Not a Plant",
+            "disease_name_ur": "غیر متعلقہ / پودا نہیں",
+            "severity": "Unknown",
+            "confidence": confidence * 100,
+            "description_en": "The uploaded image does not appear to be a recognized plant leaf or the model is unsure. Please upload a clear image of a plant leaf.",
+            "description_ur": "یہ تصویر کسی پودے کے پتے کی نہیں لگتی۔ براہ کرم پتے کی واضح تصویر اپ لوڈ کریں۔",
+            "symptoms_en": ["None"],
+            "symptoms_ur": ["کوئی نہیں"],
+            "organic_treatment_en": "N/A",
+            "organic_treatment_ur": "قابل اطلاق نہیں",
+            "chemical_treatment_en": "N/A",
+            "chemical_treatment_ur": "قابل اطلاق نہیں",
+            "prevention_en": "N/A",
+            "prevention_ur": "قابل اطلاق نہیں"
+        }
+        return JSONResponse(response_data)
     
     # Generic parsing of label assuming format like "Tomato___Early_blight"
     parts = label.split("___")
@@ -135,7 +157,7 @@ async def predict(file: UploadFile = File(...)):
         "disease_name_en": disease,
         "disease_name_ur": f"{disease} (اردو)",
         "severity": severity,
-        "confidence": top["confidence"] * 100,
+        "confidence": confidence * 100,
         "description_en": f"The plant {plant} appears to be {'healthy' if is_healthy else 'affected by ' + disease}.",
         "description_ur": f"پودا {plant} {'صحت مند ہے' if is_healthy else disease + ' سے متاثر ہے'}",
         "symptoms_en": ["No visible symptoms"] if is_healthy else [f"Signs of {disease} on leaves", "Discoloration", "Spots or lesions"],
