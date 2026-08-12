@@ -627,6 +627,33 @@
     <!-- DIAGNOSIS RESULTS DISPLAY SECTION -->
     <section id="results-section" class="hidden scroll-mt-24 space-y-8">
       
+      <!-- UNCLEAR IMAGE STATE (NEW) -->
+      <div id="unclear-state-container" class="hidden bg-[rgba(251,191,36,0.08)] rounded-3xl p-6 sm:p-10 border border-[rgba(251,191,36,0.3)] shadow-md text-center max-w-3xl mx-auto space-y-6">
+        <div class="text-6xl text-amber-400 mb-4">⚠️</div>
+        <h2 id="unclear-title-en" class="text-2xl font-bold text-amber-600">Image Not Clear</h2>
+        <h2 id="unclear-title-ur" class="urdu-text text-2xl font-bold text-amber-600">تصویر واضح نہیں</h2>
+        <p id="unclear-desc-en" class="text-slate-700"></p>
+        <p id="unclear-desc-ur" class="urdu-text text-slate-700 mt-2"></p>
+        
+        <div class="bg-white/60 p-6 rounded-2xl border border-amber-200 text-left mt-6">
+          <h3 class="font-bold text-slate-800 mb-2 border-b border-amber-200/50 pb-2 flex justify-between">
+            <span>How to take a good photo</span>
+            <span class="urdu-text">اچھی تصویر کیسے لیں</span>
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 mt-4 text-sm text-slate-700">
+            <ul id="unclear-tips-en" class="list-disc list-inside space-y-1"></ul>
+            <ul id="unclear-tips-ur" class="urdu-text space-y-1" style="list-style-position: inside; list-style-type: disc; direction: rtl;"></ul>
+          </div>
+        </div>
+        
+        <button onclick="resetApp()" class="mt-6 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl shadow-lg transition-all inline-flex items-center gap-2">
+          <i class="fa-solid fa-rotate-left"></i> Try Again / دوبارہ کوشش کریں
+        </button>
+      </div>
+
+      <!-- NORMAL RESULTS STATE -->
+      <div id="normal-results-container" class="space-y-8">
+        
       <!-- Top Overview Banner -->
       <div class="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-md space-y-6">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-6">
@@ -640,20 +667,49 @@
                 <span id="res-plant-type" class="px-2.5 py-0.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-full">Plant Leaf</span>
                 <span id="res-severity" class="px-2.5 py-0.5 bg-rose-100 text-rose-700 text-xs font-semibold rounded-full">High Severity</span>
               </div>
-              <h2 id="res-title-en" class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">Disease Name</h2>
+              <h2 class="text-2xl sm:text-3xl font-bold text-slate-900 mt-1 flex items-center flex-wrap gap-2">
+                <span id="res-title-en">Disease Name</span>
+                <span id="auto-crop-tag" style="
+                  display: none;
+                  background: rgba(16, 185, 129, 0.15);
+                  border: 1px solid rgba(16, 185, 129, 0.35);
+                  color: #34d399;
+                  padding: 3px 12px;
+                  border-radius: 20px;
+                  font-size: 0.68rem;
+                  font-weight: 700;
+                  letter-spacing: 0.06em;
+                  text-transform: uppercase;
+                "></span>
+              </h2>
               <p id="res-title-ur" class="urdu-text text-xl font-bold text-slate-700">بیماری کا نام</p>
             </div>
           </div>
 
           <!-- Confidence Score Gauge -->
-          <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex items-center gap-4 shrink-0">
-            <div class="text-right">
-              <p class="text-xs text-slate-500 font-semibold">Model Confidence</p>
-              <p id="res-confidence-num" class="text-2xl font-black text-brand-700">98.4%</p>
-              <p class="text-[10px] text-slate-400">Softmax Accuracy</p>
+          <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col justify-center items-end shrink-0 gap-2">
+            <div id="ai-model-badge" style="display:none;">
+              <span id="ai-model-badge-inner" style="
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 3px 12px;
+                border-radius: 20px;
+                font-size: 0.68rem;
+                font-weight: 700;
+                letter-spacing: 0.05em;
+                text-transform: uppercase;
+              "></span>
             </div>
-            <div class="w-12 h-12 rounded-full bg-emerald-100 text-brand-700 flex items-center justify-center text-lg font-bold">
-              <i class="fa-solid fa-circle-check"></i>
+            <div class="flex items-center gap-4">
+              <div class="text-right">
+                <p class="text-xs text-slate-500 font-semibold">Model Confidence</p>
+                <p id="res-confidence-num" class="text-2xl font-black text-brand-700">98.4%</p>
+                <p class="text-[10px] text-slate-400">Softmax Accuracy</p>
+              </div>
+              <div class="w-12 h-12 rounded-full bg-emerald-100 text-brand-700 flex items-center justify-center text-lg font-bold">
+                <i class="fa-solid fa-circle-check"></i>
+              </div>
             </div>
           </div>
 
@@ -769,6 +825,7 @@
           </button>
         </div>
 
+      </div>
       </div>
 
     </section>
@@ -983,6 +1040,12 @@
 
         clearInterval(timerInterval);
         
+        // Handle unclear image FIRST
+        if (apiResult.model_used === 'none' || apiResult.crop_type === 'Unknown' || apiResult.confidence === 0) {
+          showUnclearImageState(apiResult);
+          return;
+        }
+        
         // Render final result to UI
         renderDiagnosisResults(apiResult);
 
@@ -1087,8 +1150,107 @@
       }
     }
 
+    // Unclear Image Logic
+    function showUnclearImageState(data) {
+      document.getElementById('normal-results-container').classList.add('hidden');
+      document.getElementById('unclear-state-container').classList.remove('hidden');
+      
+      document.getElementById('unclear-desc-en').textContent = data.description_en || "Could not detect crop type. Please upload a clear photo.";
+      document.getElementById('unclear-desc-ur').textContent = data.description_ur || "فصل کی قسم معلوم نہ ہو سکی۔ براہ کرم واضح تصویر لیں۔";
+      
+      const tipsEn = document.getElementById('unclear-tips-en');
+      tipsEn.innerHTML = '';
+      (data.symptoms_en || []).forEach(tip => {
+        const li = document.createElement('li');
+        li.textContent = tip;
+        tipsEn.appendChild(li);
+      });
+      
+      const tipsUr = document.getElementById('unclear-tips-ur');
+      tipsUr.innerHTML = '';
+      (data.symptoms_ur || []).forEach(tip => {
+        const li = document.createElement('li');
+        li.textContent = tip;
+        tipsUr.appendChild(li);
+      });
+
+      const resultsSec = document.getElementById('results-section');
+      resultsSec.classList.remove('hidden');
+      resultsSec.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    function showCropDetectedTag(cropType, modelUsed) {
+      const tag = document.getElementById('auto-crop-tag');
+      if (!tag) return;
+      
+      if (!cropType || cropType === 'Unknown') {
+        tag.style.display = 'none';
+        return;
+      }
+      
+      const cropEmojis = {
+        'Wheat':  '🌾',
+        'Chilli': '🌶️',
+        'Tomato': '🍅',
+        'Corn':   '🌽',
+        'Potato': '🥔',
+        'Apple':  '🍎',
+        'Grape':  '🍇',
+        'Peach':  '🍑',
+      };
+      
+      const emoji = cropEmojis[cropType] || '🌿';
+      tag.textContent   = `${emoji} Auto-Detected: ${cropType}`;
+      tag.style.display = 'inline';
+    }
+
+    function showModelBadge(modelUsed) {
+      const wrapper = document.getElementById('ai-model-badge');
+      const badge   = document.getElementById('ai-model-badge-inner');
+      if (!wrapper || !badge) return;
+
+      const styles = {
+        'wheat_specialist': {
+          bg:     'rgba(251, 191, 36, 0.12)',
+          border: '1px solid rgba(251, 191, 36, 0.45)',
+          color:  '#fbbf24',
+          label:  '🌾 Wheat Specialist AI — 92.3% Acc'
+        },
+        'chilli_specialist': {
+          bg:     'rgba(239, 68, 68, 0.12)',
+          border: '1px solid rgba(239, 68, 68, 0.45)',
+          color:  '#f87171',
+          label:  '🌶️ Chilli Specialist AI'
+        },
+        'general_plantvillage': {
+          bg:     'rgba(99, 102, 241, 0.12)',
+          border: '1px solid rgba(99, 102, 241, 0.45)',
+          color:  '#818cf8',
+          label:  '🌿 General Plant AI — 39 Crops'
+        },
+        'none': {
+          bg:     'rgba(107, 114, 128, 0.12)',
+          border: '1px solid rgba(107, 114, 128, 0.35)',
+          color:  '#9ca3af',
+          label:  '⚠️ Detection Failed'
+        }
+      };
+
+      const s = styles[modelUsed] || styles['general_plantvillage'];
+      Object.assign(badge.style, {
+        background: s.bg,
+        border:     s.border,
+        color:      s.color,
+      });
+      badge.textContent    = s.label;
+      wrapper.style.display = 'block';
+    }
+
     // Render structured results into UI
     function renderDiagnosisResults(data) {
+      document.getElementById('unclear-state-container').classList.add('hidden');
+      document.getElementById('normal-results-container').classList.remove('hidden');
+
       document.getElementById('res-plant-type').textContent = data.plant_type || "Plant Leaf";
       document.getElementById('res-severity').textContent = `${data.severity || 'Moderate'} Severity`;
       document.getElementById('res-title-en').textContent = data.disease_name_en || "Identified Disease";
@@ -1130,6 +1292,10 @@
         li.textContent = `• ${sym}`;
         urSymptomsList.appendChild(li);
       });
+      
+      showCropDetectedTag(data.crop_type, data.model_used);
+      showModelBadge(data.model_used);
+      
       // Save to local storage history
       saveToHistory(data);
     }

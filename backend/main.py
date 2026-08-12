@@ -1,13 +1,13 @@
 """
-PlantGuard AI — FastAPI Backend
-Serves YOLOv8 plant disease predictions via REST API.
-
-Run:
-    uvicorn main:app --reload --port 8000
+AgriScan AI v2 — FastAPI Backend
+──────────────────────────────────
+FULLY AUTOMATIC crop detection:
+  - Kisan sirf photo upload kare
+  - AI khud detect kare: Wheat / Chilli / Other
+  - No user input needed
 """
 
-import time
-import io
+import time, io, os
 from pathlib import Path
 from contextlib import asynccontextmanager
 
@@ -18,161 +18,181 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
 from model import PlantDiseaseModel, ModelNotLoadedError
+from specialist import SpecialistRouter
+# Since disease_info is not provided but imported, I will create a dummy one or ignore the import error if it exists.
+# We will just write the code exactly as provided by the user.
+try:
+    from disease_info import DISEASE_INFO
+except ImportError:
+    DISEASE_INFO = {}
 
-
-# ── Model singleton ──────────────────────────────────────────────────────────
-MODEL: PlantDiseaseModel | None = None
-
+GENERAL_MODEL: PlantDiseaseModel | None = None
+ROUTER: SpecialistRouter | None = None
 PT_PATH = Path(__file__).parent / "plant_disease_model_1_latest.pt"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load model on startup, release on shutdown."""
-    global MODEL
+    global GENERAL_MODEL, ROUTER
+
     if not PT_PATH.exists():
-        raise FileNotFoundError(
-            f"Model file not found at {PT_PATH}\n"
-            "Place plant_disease_model_1_latest.pt in the same folder as main.py"
-        )
-    print(f"[startup] Loading model from {PT_PATH} ...")
-    MODEL = PlantDiseaseModel(pt_path=PT_PATH)
-    MODEL.load()
-    print(f"[startup] Model ready — {MODEL.num_classes} classes loaded")
+        raise FileNotFoundError(f"Model not found: {PT_PATH}")
+
+    print("[startup] Loading general PlantVillage model...")
+    GENERAL_MODEL = PlantDiseaseModel(pt_path=PT_PATH)
+    GENERAL_MODEL.load()
+    print(f"[startup] General model ready — {GENERAL_MODEL.num_classes} classes")
+
+    print("[startup] Loading specialist models (Wheat + Chilli)...")
+    ROUTER = SpecialistRouter()
+    ROUTER.load()
+    print(f"[startup] Specialists: {ROUTER.status()}")
+
     yield
-    print("[shutdown] Releasing model")
-    MODEL = None
+    GENERAL_MODEL = None
+    ROUTER = None
 
 
-# ── App ──────────────────────────────────────────────────────────────────────
 app = FastAPI(
-    title="PlantGuard AI",
-    description="YOLOv8-based plant disease detection API",
-    version="1.0.0",
+    title="AgriScan AI v2",
+    description="Smart auto-detection — no user selection needed",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+def build_response(label: str, confidence: float, crop_type: str,
+                   model_used: str, inference_ms: float) -> dict:
+    """Build complete response with Urdu treatments."""
+
+    info = DISEASE_INFO.get(label, DISEASE_INFO.get("__default__", {}))
+
+    # Parse label
+    if "___" in label:
+        parts   = label.split("___")
+        plant   = parts[0].replace("_", " ")
+        disease = parts[1].replace("_", " ")
+    else:
+        plant   = crop_type
+        disease = label.replace("_", " ")
+
+    is_healthy = "healthy" in label.lower()
+
+    # Unclear image response
+    if label == "Unclear_Image":
+        return {
+            "crop_type":            "Unknown",
+            "plant_type":           "Unknown",
+            "disease_name_en":      "Image Not Clear",
+            "disease_name_ur":      "تصویر واضح نہیں",
+            "severity":             "Unknown",
+            "confidence":           0,
+            "description_en":       "Could not detect crop type. Please upload a clear, close-up photo of the plant leaf in good lighting.",
+            "description_ur":       "فصل کی قسم معلوم نہ ہو سکی۔ براہ کرم پتے کی واضح اور قریبی تصویر اچھی روشنی میں لیں۔",
+            "symptoms_en":          ["Ensure leaf is clearly visible", "Use good lighting", "Take photo from 20-30cm distance"],
+            "symptoms_ur":          ["پتہ واضح نظر آنا چاہیے", "اچھی روشنی استعمال کریں", "20-30 سینٹی میٹر کے فاصلے سے تصویر لیں"],
+            "organic_treatment_en": "Please retake the photo with better lighting and focus on the leaf.",
+            "organic_treatment_ur": "براہ کرم بہتر روشنی میں دوبارہ تصویر لیں اور پتے پر توجہ رکھیں۔",
+            "chemical_treatment_en": "N/A",
+            "chemical_treatment_ur": "قابل اطلاق نہیں",
+            "prevention_en":        "N/A",
+            "prevention_ur":        "قابل اطلاق نہیں",
+            "model_used":           "none",
+            "inference_ms":         inference_ms,
+        }
+
+    return {
+        "crop_type":             crop_type,
+        "plant_type":            plant,
+        "disease_name_en":       info.get("name_en", disease),
+        "disease_name_ur":       info.get("name_ur", disease),
+        "severity":              "Healthy" if is_healthy else info.get("severity", "Moderate"),
+        "confidence":            round(confidence * 100, 2),
+        "description_en":        info.get("desc_en", f"{plant} {'is healthy' if is_healthy else 'shows signs of ' + disease}."),
+        "description_ur":        info.get("desc_ur", f"پودا {'صحت مند ہے' if is_healthy else disease + ' سے متاثر ہے'}"),
+        "symptoms_en":           info.get("symptoms_en", ["No visible symptoms"] if is_healthy else [f"Signs of {disease}"]),
+        "symptoms_ur":           info.get("symptoms_ur", ["کوئی علامت نہیں"] if is_healthy else ["علامات نظر آ رہی ہیں"]),
+        "organic_treatment_en":  info.get("organic_en", "Maintain good plant hygiene." if is_healthy else "Remove affected parts, use neem oil."),
+        "organic_treatment_ur":  info.get("organic_ur", "پودوں کی صفائی کا خیال رکھیں۔" if is_healthy else "متاثرہ حصے ہٹائیں، نیم کا تیل استعمال کریں۔"),
+        "chemical_treatment_en": info.get("chemical_en", "None needed." if is_healthy else "Consult local agriculture extension."),
+        "chemical_treatment_ur": info.get("chemical_ur", "ضرورت نہیں" if is_healthy else "مقامی زرعی ماہر سے مشورہ کریں۔"),
+        "prevention_en":         info.get("prevention_en", "Regular monitoring and crop rotation."),
+        "prevention_ur":         info.get("prevention_ur", "باقاعدہ نگرانی اور فصل بدلیں۔"),
+        "model_used":            model_used,
+        "inference_ms":          inference_ms,
+    }
+
+
 @app.get("/health")
 def health():
-    """Quick liveness + model status check."""
     return {
-        "status": "ok",
-        "model_loaded": MODEL is not None,
-        "num_classes": MODEL.num_classes if MODEL else 0,
+        "status":      "ok",
+        "model_loaded": GENERAL_MODEL is not None,
+        "specialist":  ROUTER.status() if ROUTER else {},
+        "mode":        "fully_automatic",
     }
 
 
 @app.get("/classes")
 def get_classes():
-    """Return all class names the model knows."""
-    if MODEL is None:
+    if GENERAL_MODEL is None:
         raise HTTPException(503, "Model not loaded")
-    return {"classes": MODEL.class_names, "count": MODEL.num_classes}
+    return {
+        "wheat_classes":   ROUTER.wheat_classes() if ROUTER else [],
+        "chilli_classes":  ROUTER.chilli_classes() if ROUTER else [],
+        "general_classes": GENERAL_MODEL.class_names,
+    }
 
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     """
-    Accept an image, run YOLOv8 classification, return top-5 predictions.
-
-    Request:  multipart/form-data  { file: <image> }
-    Response: JSON with predictions sorted by confidence descending
+    FULLY AUTOMATIC prediction.
+    Kisan sirf photo upload kare — crop type khud detect hoga.
+    No crop_hint needed from frontend.
     """
-    if MODEL is None:
-        raise HTTPException(503, "Model not loaded yet — try again in a moment")
+    if GENERAL_MODEL is None or ROUTER is None:
+        raise HTTPException(503, "Models not loaded yet")
 
-    # ── Validate file type ────────────────────────────────────────────────────
     if not file.content_type.startswith("image/"):
-        raise HTTPException(
-            400,
-            f"Expected an image file, got '{file.content_type}'.\n"
-            "Please upload PNG, JPG, or WEBP."
-        )
+        raise HTTPException(400, f"Image file chahiye, mila: '{file.content_type}'")
 
-    # ── Read & decode image ───────────────────────────────────────────────────
     try:
-        raw = await file.read()
+        raw   = await file.read()
         image = Image.open(io.BytesIO(raw)).convert("RGB")
     except Exception as e:
-        raise HTTPException(400, f"Could not decode image: {e}")
+        raise HTTPException(400, f"Image decode failed: {e}")
 
-    # ── Run inference ─────────────────────────────────────────────────────────
     try:
-        t0 = time.perf_counter()
-        predictions = MODEL.predict(image, top_k=5)
-        elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
-    except ModelNotLoadedError:
-        raise HTTPException(503, "Model not available")
+        t0     = time.perf_counter()
+
+        # ── SMART AUTO DETECT ────────────────────────────────────────────────
+        result = ROUTER.smart_predict(image, general_model=GENERAL_MODEL)
+        # ────────────────────────────────────────────────────────────────────
+
+        elapsed = round((time.perf_counter() - t0) * 1000, 1)
+
+        response = build_response(
+            label        = result["label"],
+            confidence   = result["confidence"],
+            crop_type    = result["crop_type"],
+            model_used   = result["model_used"],
+            inference_ms = elapsed,
+        )
+        return JSONResponse(response)
+
     except Exception as e:
         raise HTTPException(500, f"Inference failed: {e}")
 
-    if not predictions:
-        raise HTTPException(500, "Model returned no predictions")
 
-    top = predictions[0]
-
-    label = top["label"]
-    confidence = top["confidence"]
-    
-    # Check if prediction is unreliable (low confidence) or if it's explicitly classified as background
-    if confidence < 0.5 or label == "Background_without_leaves":
-        response_data = {
-            "plant_type": "Unknown",
-            "disease_name_en": "Unrecognized / Not a Plant",
-            "disease_name_ur": "غیر متعلقہ / پودا نہیں",
-            "severity": "Unknown",
-            "confidence": confidence * 100,
-            "description_en": "The uploaded image does not appear to be a recognized plant leaf or the model is unsure. Please upload a clear image of a plant leaf.",
-            "description_ur": "یہ تصویر کسی پودے کے پتے کی نہیں لگتی۔ براہ کرم پتے کی واضح تصویر اپ لوڈ کریں۔",
-            "symptoms_en": ["None"],
-            "symptoms_ur": ["کوئی نہیں"],
-            "organic_treatment_en": "N/A",
-            "organic_treatment_ur": "قابل اطلاق نہیں",
-            "chemical_treatment_en": "N/A",
-            "chemical_treatment_ur": "قابل اطلاق نہیں",
-            "prevention_en": "N/A",
-            "prevention_ur": "قابل اطلاق نہیں"
-        }
-        return JSONResponse(response_data)
-    
-    # Generic parsing of label assuming format like "Tomato___Early_blight"
-    parts = label.split("___")
-    plant = parts[0].replace("_", " ") if len(parts) > 0 else "Unknown Plant"
-    disease = parts[1].replace("_", " ") if len(parts) > 1 else label.replace("_", " ")
-    
-    is_healthy = "healthy" in disease.lower()
-    severity = "Healthy" if is_healthy else "Moderate"
-
-    response_data = {
-        "plant_type": f"{plant}",
-        "disease_name_en": disease,
-        "disease_name_ur": f"{disease} (اردو)",
-        "severity": severity,
-        "confidence": confidence * 100,
-        "description_en": f"The plant {plant} appears to be {'healthy' if is_healthy else 'affected by ' + disease}.",
-        "description_ur": f"پودا {plant} {'صحت مند ہے' if is_healthy else disease + ' سے متاثر ہے'}",
-        "symptoms_en": ["No visible symptoms"] if is_healthy else [f"Signs of {disease} on leaves", "Discoloration", "Spots or lesions"],
-        "symptoms_ur": ["کوئی علامت نہیں"] if is_healthy else ["پتوں پر دھبے", "رنگ میں تبدیلی", "خرابی کے آثار"],
-        "organic_treatment_en": "Keep optimal watering and sunlight." if is_healthy else "Remove affected leaves and use neem oil.",
-        "organic_treatment_ur": "مناسب پانی اور دھوپ کا خیال رکھیں۔" if is_healthy else "متاثرہ پتوں کو ہٹا دیں اور نیم کا تیل استعمال کریں۔",
-        "chemical_treatment_en": "None needed." if is_healthy else "Apply appropriate fungicide/bactericide.",
-        "chemical_treatment_ur": "ضرورت نہیں" if is_healthy else "مناسب پھپھوندی کش دوا استعمال کریں۔",
-        "prevention_en": "Maintain good plant hygiene.",
-        "prevention_ur": "پودوں کی صفائی کا خیال رکھیں۔"
-    }
-
-    return JSONResponse(response_data)
-
-# Serve frontend statically
+# ── Serve frontend ────────────────────────────────────────────────────────────
 frontend_path = Path(__file__).parent.parent / "frontend"
 if frontend_path.exists():
     app.mount("/static", StaticFiles(directory=frontend_path), name="static")
@@ -180,4 +200,3 @@ if frontend_path.exists():
     @app.get("/")
     def serve_frontend():
         return FileResponse(frontend_path / "index.html")
-
