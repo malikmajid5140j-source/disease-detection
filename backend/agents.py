@@ -1,9 +1,9 @@
 """
 AgriScan AI v3 — Multi-Agent System
 ─────────────────────────────────────
-Key insight: CLIP dekhta hai PURI image — sirf leaf nahi.
-Wheat field, diseased crop, plant stem — sab accept karo.
-Sirf clearly non-plant reject karo (human face, car, food on plate).
+Key insight: Universal Object Identifier using CLIP.
+Identifies exactly what the object is, rejecting non-supported objects
+with clear messages, and routing supported crops to specialists.
 """
 
 from __future__ import annotations
@@ -45,55 +45,113 @@ CHILLI_CLASSES = [
 
 
 # ═══════════════════════════════════════════════════════════════
-# AGENT 1 — GATEKEEPER
-# Puri image dekhta hai — sirf clearly non-agricultural reject
+# AGENT 1 — GATEKEEPER (Universal Object Identifier)
 # ═══════════════════════════════════════════════════════════════
 class GatekeeperAgent:
     """
-    CLIP se check karta hai: Kya yeh agricultural image hai?
-    
-    ACCEPT:
-      - Wheat leaves, stalks, field, crop
-      - Chilli plant, pepper, diseased crop
-      - Any plant, vegetation, farming scene
-      - Blurry/dark crop photo — specialists handle it
-      - Whole plant, stem, roots — not just leaf
-    
-    REJECT (ONLY clearly non-agricultural):
-      - Human face / selfie
-      - Car, building, furniture
-      - Cooked food on plate / restaurant
-      - Screenshot / text / document
-      - Random objects (phone, bottle, etc.)
+    CLIP-based Universal Object Identifier.
+    Classifies the incoming image into specific categories, identifying whether
+    it is a supported crop or a clearly unsupported object.
     """
-
-    # Broad agricultural prompts — field/crop/plant sab accept
-    AGRI_PROMPTS = [
-        "a photo of agricultural crops or plants",
-        "a photo of wheat or cereal crops in a field",
-        "a photo of chilli or pepper plant",
-        "a photo of diseased or unhealthy plant",
-        "a photo of green or yellow plant vegetation",
-        "a photo of a crop field or farm",
-        "a photo of plant leaves stems or roots",
-        "a photo of a sick or infected crop",
-        "a close up photo of plant texture or surface",
-        "a photo of farming or agriculture",
-    ]
-
-    # Only CLEARLY non-agricultural things
-    NOT_AGRI_PROMPTS = [
-        "a photo of a human face or person",
-        "a selfie or portrait photo",
-        "a photo of a car or vehicle",
-        "a photo of a building or indoor room",
-        "a photo of cooked food on a plate or in a bowl",
-        "a photo of a smartphone or electronic device",
-        "a screenshot of text or a website",
-        "a photo of an animal like a dog or cat",
-        "a photo of furniture or household objects",
-        "a photo of clothing or fashion",
-    ]
+    CATEGORIES = {
+        "human": {
+            "prompts": ["a photo of a human face", "a selfie of a person", "a portrait of a person"],
+            "is_supported": False,
+            "name_en": "Human Face / Person",
+            "name_ur": "انسان کا چہرہ / شخص"
+        },
+        "potato_vegetable": {
+            "prompts": ["a photo of raw potato vegetable", "a potato tuber", "potatoes in a pile"],
+            "is_supported": False,
+            "name_en": "Potato Tuber / Vegetable",
+            "name_ur": "آلو کی سبزی"
+        },
+        "food": {
+            "prompts": ["a photo of cooked food on a plate", "a bowl of soup or meal", "a dish of food"],
+            "is_supported": False,
+            "name_en": "Cooked Food / Meal",
+            "name_ur": "پکا ہوا کھانا / خوراک"
+        },
+        "car": {
+            "prompts": ["a photo of a car", "a photo of a vehicle", "a truck or automobile"],
+            "is_supported": False,
+            "name_en": "Car / Vehicle",
+            "name_ur": "گاڑی / وہیکل"
+        },
+        "animal": {
+            "prompts": ["a photo of a dog or cat", "a photo of a cow or sheep", "a photo of an animal"],
+            "is_supported": False,
+            "name_en": "Animal / Pet",
+            "name_ur": "جانور / پالتو جانور"
+        },
+        "building": {
+            "prompts": ["a photo of a house or building", "an indoor room", "a street scene"],
+            "is_supported": False,
+            "name_en": "Building / Indoor Room",
+            "name_ur": "عمارت / اندورنِ کمرہ"
+        },
+        "device": {
+            "prompts": ["a photo of a smartphone", "a laptop or computer", "an electronic gadget"],
+            "is_supported": False,
+            "name_en": "Electronic Device / Gadget",
+            "name_ur": "الیکٹرانک ڈیوائس"
+        },
+        "text": {
+            "prompts": ["a screenshot of a website", "a page of a document or book", "written text on paper"],
+            "is_supported": False,
+            "name_en": "Screenshot / Document Text",
+            "name_ur": "اسکرین شاٹ / تحریری دستاویز"
+        },
+        "wheat": {
+            "prompts": ["a photo of wheat leaves", "a photo of wheat plant", "a photo of a wheat crop field"],
+            "is_supported": True,
+            "crop_name": "wheat",
+            "name_en": "Wheat Plant / Leaf",
+            "name_ur": "گندم کا پودا / پتہ"
+        },
+        "chilli": {
+            "prompts": ["a photo of chilli plant", "a photo of pepper crop", "a photo of green or red chilli pepper"],
+            "is_supported": True,
+            "crop_name": "chilli",
+            "name_en": "Chilli Plant / Leaf",
+            "name_ur": "مرچ کا پودا / پتہ"
+        },
+        "tomato": {
+            "prompts": ["a photo of tomato plant", "a photo of tomato leaf"],
+            "is_supported": True,
+            "crop_name": "tomato",
+            "name_en": "Tomato Plant / Leaf",
+            "name_ur": "ٹماٹر کا پودا / پتہ"
+        },
+        "potato_leaf": {
+            "prompts": ["a photo of potato plant leaf", "a photo of potato leaves"],
+            "is_supported": True,
+            "crop_name": "potato",
+            "name_en": "Potato Plant Leaf",
+            "name_ur": "آلو کے پودے کا پتہ"
+        },
+        "corn": {
+            "prompts": ["a photo of corn plant", "a photo of maize leaf", "a photo of corn leaf"],
+            "is_supported": True,
+            "crop_name": "corn",
+            "name_en": "Corn / Maize Plant",
+            "name_ur": "مکئی کا پودا"
+        },
+        "apple_leaf": {
+            "prompts": ["a photo of apple leaf", "a photo of apple plant leaf"],
+            "is_supported": True,
+            "crop_name": "apple",
+            "name_en": "Apple Plant Leaf",
+            "name_ur": "سیب کے پودے کا پتہ"
+        },
+        "other_plant": {
+            "prompts": ["a photo of some other plant leaf", "a photo of green leaves of a tree", "a photo of house plant"],
+            "is_supported": True,
+            "crop_name": "other",
+            "name_en": "Other Plant Leaf",
+            "name_ur": "کسی دوسرے پودے کا پتہ"
+        }
+    }
 
     def __init__(self):
         self.model      = None
@@ -111,117 +169,70 @@ class GatekeeperAgent:
             self.ready = False
 
     def check(self, image: Image.Image) -> dict:
-        """
-        Returns:
-          is_agri: True = agricultural image, proceed
-          agri_score: 0-1
-          not_agri_score: 0-1
-          reason: debug string
-        """
         if not self.ready:
-            # CLIP nahi hai — specialists par trust karo
             return {
-                "is_agri":        True,
-                "agri_score":     0.6,
-                "not_agri_score": 0.4,
-                "reason":         "clip_unavailable_trusting_specialists",
+                "is_supported": True,
+                "crop_name": "other",
+                "name_en": "Unknown Plant",
+                "name_ur": "نامعلوم پودا",
+                "reason": "clip_unavailable",
+                "best_cat": "other_plant"
             }
 
         import clip
-        img_t     = self.preprocess(image).unsqueeze(0).to(DEVICE)
-        all_txt   = self.AGRI_PROMPTS + self.NOT_AGRI_PROMPTS
-        text_t    = clip.tokenize(all_txt).to(DEVICE)
+        img_tensor  = self.preprocess(image).unsqueeze(0).to(DEVICE)
+        
+        all_prompts = []
+        prompt_to_category = []
+        for cat_key, cat_val in self.CATEGORIES.items():
+            for p in cat_val["prompts"]:
+                all_prompts.append(p)
+                prompt_to_category.append(cat_key)
+                
+        text_tensor = clip.tokenize(all_prompts).to(DEVICE)
 
         with torch.no_grad():
-            img_feat  = self.model.encode_image(img_t)
-            txt_feat  = self.model.encode_text(text_t)
+            img_feat  = self.model.encode_image(img_tensor)
+            txt_feat  = self.model.encode_text(text_tensor)
             img_feat  = img_feat / img_feat.norm(dim=-1, keepdim=True)
             txt_feat  = txt_feat / txt_feat.norm(dim=-1, keepdim=True)
             probs     = (100.0 * img_feat @ txt_feat.T).softmax(dim=-1)[0].cpu().numpy()
 
-        n_agri      = len(self.AGRI_PROMPTS)
-        agri_score  = float(probs[:n_agri].sum())
-        not_score   = float(probs[n_agri:].sum())
+        cat_scores = {}
+        for idx, prob in enumerate(probs):
+            cat_key = prompt_to_category[idx]
+            cat_scores[cat_key] = cat_scores.get(cat_key, 0.0) + float(prob)
 
-        top_agri_idx = int(probs[:n_agri].argmax())
-        top_not_idx  = int(probs[n_agri:].argmax())
-        top_agri     = self.AGRI_PROMPTS[top_agri_idx]
-        top_not      = self.NOT_AGRI_PROMPTS[top_not_idx]
-
-        # STRICT rejection — sirf tab reject karo jab:
-        # 1. not_agri clearly wins (>0.65) — ya
-        # 2. agri score bahut kam hai (<0.30)
-        # Dubious cases mein specialists par chhoddo
-        is_agri = not (not_score > 0.65 or agri_score < 0.30)
-
-        reason = (f"agri={agri_score:.2f} not={not_score:.2f} "
-                  f"top_agri='{top_agri[:30]}' "
-                  f"top_not='{top_not[:30]}'")
+        best_cat = max(cat_scores, key=cat_scores.get)
+        best_score = cat_scores[best_cat]
+        cat_info = self.CATEGORIES[best_cat]
 
         return {
-            "is_agri":        is_agri,
-            "agri_score":     agri_score,
-            "not_agri_score": not_score,
-            "reason":         reason,
+            "is_supported": cat_info["is_supported"],
+            "crop_name": cat_info.get("crop_name", "other"),
+            "name_en": cat_info["name_en"],
+            "name_ur": cat_info["name_ur"],
+            "best_cat": best_cat,
+            "reason": f"Detected: {cat_info['name_en']} (conf={best_score:.2f})",
         }
 
 
 # ═══════════════════════════════════════════════════════════════
 # AGENT 2 — CROP ROUTER
-# Puri image se crop identify karta hai
 # ═══════════════════════════════════════════════════════════════
 class CropRouterAgent:
-    """
-    Puri image context se crop identify karta hai.
-    Wheat field, yellowing crop, diseased stalks — sab wheat.
-    """
-
-    CROP_PROMPTS = {
-        "wheat":  "a photo of wheat crop, wheat field, or wheat plant with disease",
-        "chilli": "a photo of chilli plant, pepper crop, or mirch with disease",
-        "tomato": "a photo of tomato plant or tomato leaves with disease",
-        "potato": "a photo of potato plant leaves or potato crop disease",
-        "corn":   "a photo of corn or maize crop or maize plant",
-        "rice":   "a photo of rice crop or paddy field or rice plant",
-        "other":  "a photo of some other agricultural plant or crop",
-    }
-
     def __init__(self, gatekeeper: GatekeeperAgent):
         self.gk = gatekeeper
 
-    def route(self, image: Image.Image) -> dict:
+    def route(self, image: Image.Image, gk_res: dict = None) -> dict:
+        if gk_res is not None:
+            return {"crop": gk_res["crop_name"], "confidence": 1.0, "scores": {}}
+        
+        # Fallback if called without gk_res
         if not self.gk.ready:
             return {"crop": "unknown", "confidence": 0.0, "scores": {}}
-
-        import clip
-        img_t   = self.gk.preprocess(image).unsqueeze(0).to(DEVICE)
-        keys    = list(self.CROP_PROMPTS.keys())
-        prompts = list(self.CROP_PROMPTS.values())
-        text_t  = clip.tokenize(prompts).to(DEVICE)
-
-        with torch.no_grad():
-            img_feat  = self.gk.model.encode_image(img_t)
-            txt_feat  = self.gk.model.encode_text(text_t)
-            img_feat  = img_feat / img_feat.norm(dim=-1, keepdim=True)
-            txt_feat  = txt_feat / txt_feat.norm(dim=-1, keepdim=True)
-            probs     = (100.0 * img_feat @ txt_feat.T).softmax(dim=-1)[0].cpu().numpy()
-
-        scores   = {k: float(v) for k, v in zip(keys, probs)}
-        top_idx  = int(probs.argmax())
-        top_crop = keys[top_idx]
-        top_conf = float(probs[top_idx])
-
-        # Lower threshold — specialist models zyada accurate hain
-        if top_crop in ("wheat", "chilli") and top_conf > 0.12:
-            route_to = top_crop
-        elif top_crop in ("tomato", "potato", "corn", "rice") and top_conf > 0.20:
-            route_to = "other"
-        else:
-            route_to = "other"
-
-        print(f"[router] top={top_crop} conf={top_conf:.2f} → routing to {route_to}")
-        return {"crop": route_to, "top": top_crop,
-                "confidence": top_conf, "scores": scores}
+        res = self.gk.check(image)
+        return {"crop": res["crop_name"], "confidence": 1.0, "scores": {}}
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -318,10 +329,10 @@ class ConsensusValidator:
     MIN_GAP  = 0.30
 
     def validate(self, pred: dict, route: dict, gk: dict) -> dict:
-        if not gk.get("is_agri", True):
-            return self._reject("not_agricultural",
-                "This does not appear to be an agricultural image.",
-                "یہ زرعی تصویر نہیں لگتی۔")
+        if not gk.get("is_supported", True):
+            return self._reject("unsupported_object",
+                "This image is not supported.",
+                "یہ تصویر سپورٹڈ نہیں ہے۔")
 
         # Confidence check only — entropy aur gap hata do
         # Field photos mein entropy naturally high hoti hai
@@ -371,24 +382,22 @@ class MultiAgentSystem:
         t0  = time.perf_counter()
         log = []
 
-        # ── Agent 1: Gatekeeper ──────────────────────────────
+        # ── Agent 1: Gatekeeper / Object Recognizer ──────────
         gk = self.gatekeeper.check(image)
         log.append(f"[gatekeeper] {gk['reason']}")
 
-        # Sirf clearly non-agricultural reject karo
-        if not gk["is_agri"]:
+        if not gk["is_supported"]:
             return self._unclear(
-                "not_agricultural",
-                "This does not appear to be a crop or plant image. Please upload a photo of an affected plant.",
-                "یہ فصل یا پودے کی تصویر نہیں لگتی۔ براہ کرم متاثرہ پودے کی تصویر اپلوڈ کریں۔",
+                "unsupported_object",
+                f"You uploaded a photo of a {gk['name_en']}. This has no relation to the crops we support (Wheat, Chilli, Tomato, Potato, Corn, Apple, etc.). Please upload an affected leaf.",
+                f"آپ نے {gk['name_ur']} کی تصویر اپلوڈ کی ہے۔ یہ ہمارے سپورٹڈ پودوں (گندم، مرچ، ٹماٹر، آلو، مکئی، سیب) سے مطابقت نہیں رکھتی۔ براہ کرم متاثرہ پتے کی تصویر اپلوڈ کریں۔",
                 log, t0)
 
         # ── Agent 2: Router ──────────────────────────────────
-        route = self.router.route(image)
-        log.append(f"[router] → {route['crop']} (conf={route['confidence']:.2f})")
+        route = self.router.route(image, gk_res=gk)
+        log.append(f"[router] → {route['crop']}")
 
         # ── Agent 3: Specialists ─────────────────────────────
-
         # Try wheat specialist
         if route["crop"] == "wheat" and self.wheat.ready:
             pred = self.wheat.predict(image)
