@@ -33,9 +33,6 @@ PT_PATH = Path(__file__).parent / "plant_disease_model_1_latest.pt"
 async def lifespan(app: FastAPI):
     global GENERAL_MODEL, ROUTER
 
-    if not PT_PATH.exists():
-        raise FileNotFoundError(f"Model not found: {PT_PATH}")
-
     print("[startup] Loading general PlantVillage model...")
     GENERAL_MODEL = PlantDiseaseModel(pt_path=PT_PATH)
     GENERAL_MODEL.load()

@@ -98,11 +98,11 @@ class PlantDiseaseModel:
         """Load the PyTorch state dictionary."""
         self._model = CustomCNN(num_classes=self.num_classes).to(self.device)
         
-        # Railway Git LFS Fix: Download real model if file is just an LFS pointer (<1MB)
+        # Railway Git LFS Fix: Download real model if file doesn't exist or is just an LFS pointer (<1MB)
         import os
         import urllib.request
-        if os.path.getsize(self.pt_path) < 1024 * 1024:
-            print(f"[model] LFS pointer detected! Downloading real model from GitHub...")
+        if not self.pt_path.exists() or os.path.getsize(self.pt_path) < 1024 * 1024:
+            print(f"[model] Model file missing or LFS pointer detected! Downloading real model from GitHub...")
             url = "https://github.com/malikmajid5140j-source/disease-detection/raw/main/backend/plant_disease_model_1_latest.pt"
             urllib.request.urlretrieve(url, self.pt_path)
             print(f"[model] Download complete.")
