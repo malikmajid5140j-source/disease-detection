@@ -1132,8 +1132,13 @@
       const form = new FormData();
       form.append("file", file);
 
+      let apiEndpoint = "/predict";
+      if (window.location.hostname.endsWith(".vercel.app") || window.location.protocol === "file:") {
+        apiEndpoint = "https://disease-detection-production.up.railway.app/predict";
+      }
+
       try {
-        const response = await fetch("/predict", {
+        const response = await fetch(apiEndpoint, {
           method: "POST",
           body: form,
         });
