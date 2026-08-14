@@ -14,6 +14,12 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv()
 
+# Limit PyTorch CPU threads to 1 to prevent CPU thrashing in resource-constrained environments (Railway)
+import torch
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+
+
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -168,8 +174,9 @@ async def predict(file: UploadFile = File(...)):
     try:
         t0     = time.perf_counter()
 
-        # ── SMART AUTO DETECT ────────────────────────────────────────────────
-        result = ROUTER.smart_predict(image, general_model=GENERAL_MODEL)
+        # ── SMART AUTO DETECT (Run in background thread to prevent blocking event loop) ──
+        import anyio
+        result = await anyio.to_thread.run_sync(ROUTER.smart_predict, image, GENERAL_MODEL)
         # ────────────────────────────────────────────────────────────────────
 
         elapsed = round((time.perf_counter() - t0) * 1000, 1)
