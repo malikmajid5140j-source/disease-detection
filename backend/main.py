@@ -19,12 +19,7 @@ from PIL import Image
 
 from model import PlantDiseaseModel, ModelNotLoadedError
 from specialist import SpecialistRouter
-# Since disease_info is not provided but imported, I will create a dummy one or ignore the import error if it exists.
-# We will just write the code exactly as provided by the user.
-try:
-    from disease_info import DISEASE_INFO
-except ImportError:
-    DISEASE_INFO = {}
+from disease_info import DISEASE_INFO
 
 GENERAL_MODEL: PlantDiseaseModel | None = None
 ROUTER: SpecialistRouter | None = None
@@ -72,7 +67,7 @@ def build_response(label: str, confidence: float, crop_type: str,
                    model_used: str, inference_ms: float) -> dict:
     """Build complete response with Urdu treatments."""
 
-    info = DISEASE_INFO.get(label, DISEASE_INFO.get("__default__", {}))
+    info = DISEASE_INFO.get(label, DISEASE_INFO.get("__default__"))
 
     # Parse label
     if "___" in label:
