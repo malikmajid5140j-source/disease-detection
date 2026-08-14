@@ -111,14 +111,14 @@ class PlantDiseaseModel:
         try:
             state_dict = torch.load(self.pt_path, map_location=self.device, weights_only=False)
         except Exception as e:
-            print(f"[model] ❌ Load failed ({e}). File might be corrupted.")
+            print(f"[model] [FAIL] Load failed ({e}). File might be corrupted.")
             print(f"[model] Deleting corrupted file and redownloading...")
             if self.pt_path.exists():
                 self.pt_path.unlink()
             
             url = "https://github.com/malikmajid5140j-source/disease-detection/raw/main/backend/plant_disease_model_1_latest.pt"
             urllib.request.urlretrieve(url, self.pt_path)
-            print(f"[model] ✅ Redownload complete.")
+            print(f"[model] [OK] Redownload complete.")
             state_dict = torch.load(self.pt_path, map_location=self.device, weights_only=False)
 
         self._model.load_state_dict(state_dict)

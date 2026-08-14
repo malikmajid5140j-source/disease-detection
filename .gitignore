@@ -1,0 +1,13 @@
+# .gitignore additions:
+backend/specialist_models/
+backend/temp/
+backend/__pycache__/
+*.pyc
+.env
+*.log
+.venv/
+__pycache__/
+models/
+test_ping.py
+download_presets.py
+

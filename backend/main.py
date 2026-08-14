@@ -1,24 +1,17 @@
 """
-AgriScan AI v2 — FastAPI Backend
-──────────────────────────────────
-FULLY AUTOMATIC crop detection:
-  - Kisan sirf photo upload kare
-  - AI khud detect kare: Wheat / Chilli / Other
-  - No user input needed
+AgriScan AI v3 — Multi-Agent Backend
+─────────────────────────────────────
+5 agents work together:
+  1. Gatekeeper (CLIP) → is this a plant?
+  2. Router (CLIP)     → which crop?
+  3. Specialists       → disease detection
+  4. Validator         → cross-check
+  5. Response Builder  → treatments
 """
 
-import time, io, os
+import io
 from pathlib import Path
 from contextlib import asynccontextmanager
-
-from dotenv import load_dotenv
-load_dotenv()
-
-# Limit PyTorch CPU threads to 1 to prevent CPU thrashing in resource-constrained environments (Railway)
-import torch
-torch.set_num_threads(1)
-torch.set_num_interop_threads(1)
-
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,38 +19,37 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
-from model import PlantDiseaseModel, ModelNotLoadedError
-from specialist import SpecialistRouter
+from model import PlantDiseaseModel
+from agents import MultiAgentSystem
 from disease_info import DISEASE_INFO
 
+
 GENERAL_MODEL: PlantDiseaseModel | None = None
-ROUTER: SpecialistRouter | None = None
+AGENTS: MultiAgentSystem | None = None
 PT_PATH = Path(__file__).parent / "plant_disease_model_1_latest.pt"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global GENERAL_MODEL, ROUTER
+    global GENERAL_MODEL, AGENTS
 
     print("[startup] Loading general PlantVillage model...")
     GENERAL_MODEL = PlantDiseaseModel(pt_path=PT_PATH)
     GENERAL_MODEL.load()
     print(f"[startup] General model ready — {GENERAL_MODEL.num_classes} classes")
 
-    print("[startup] Loading specialist models (Wheat + Chilli)...")
-    ROUTER = SpecialistRouter()
-    ROUTER.load()
-    print(f"[startup] Specialists: {ROUTER.status()}")
+    print("[startup] Initializing multi-agent system...")
+    AGENTS = MultiAgentSystem(general_model=GENERAL_MODEL)
+    AGENTS.load()
+    print("[startup] [OK] Multi-agent system ready!")
 
     yield
-    GENERAL_MODEL = None
-    ROUTER = None
+    print("[shutdown] Releasing resources")
 
 
 app = FastAPI(
-    title="AgriScan AI v2",
-    description="Smart auto-detection — no user selection needed",
-    version="2.0.0",
+    title="AgriScan AI v3 — Multi-Agent",
+    version="3.0.0",
     lifespan=lifespan,
 )
 
@@ -69,101 +61,99 @@ app.add_middleware(
 )
 
 
-def build_response(label: str, confidence: float, crop_type: str,
-                   model_used: str, inference_ms: float) -> dict:
-    """Build complete response with Urdu treatments."""
+def build_response(agent_result: dict) -> dict:
+    """Convert agent output to full frontend response."""
 
-    info = DISEASE_INFO.get(label, DISEASE_INFO.get("__default__"))
-
-    # Parse label
-    if "___" in label:
-        parts   = label.split("___")
-        plant   = parts[0].replace("_", " ")
-        disease = parts[1].replace("_", " ")
-    else:
-        plant   = crop_type
-        disease = label.replace("_", " ")
-
-    is_healthy = "healthy" in label.lower()
-
-    # Unclear image response
-    if label == "Unclear_Image":
+    # Unclear case
+    if not agent_result.get('success'):
         return {
-            "crop_type":            "Unknown",
-            "plant_type":           "Unknown",
-            "disease_name_en":      "Image Not Clear",
-            "disease_name_ur":      "تصویر واضح نہیں",
-            "severity":             "Unknown",
-            "confidence":           0,
-            "description_en":       "Could not detect crop type. Please upload a clear, close-up photo of the plant leaf in good lighting.",
-            "description_ur":       "فصل کی قسم معلوم نہ ہو سکی۔ براہ کرم پتے کی واضح اور قریبی تصویر اچھی روشنی میں لیں۔",
-            "symptoms_en":          ["Ensure leaf is clearly visible", "Use good lighting", "Take photo from 20-30cm distance"],
-            "symptoms_ur":          ["پتہ واضح نظر آنا چاہیے", "اچھی روشنی استعمال کریں", "20-30 سینٹی میٹر کے فاصلے سے تصویر لیں"],
-            "organic_treatment_en": "Please retake the photo with better lighting and focus on the leaf.",
-            "organic_treatment_ur": "براہ کرم بہتر روشنی میں دوبارہ تصویر لیں اور پتے پر توجہ رکھیں۔",
-            "chemical_treatment_en": "N/A",
-            "chemical_treatment_ur": "قابل اطلاق نہیں",
-            "prevention_en":        "N/A",
-            "prevention_ur":        "قابل اطلاق نہیں",
-            "model_used":           "none",
-            "inference_ms":         inference_ms,
+            'crop_type':             'Unknown',
+            'plant_type':            'Unknown',
+            'disease_name_en':       'Image Not Recognized',
+            'disease_name_ur':       'تصویر کی شناخت نہیں ہوئی',
+            'severity':              'Unknown',
+            'confidence':            0,
+            'description_en':        agent_result.get('message_en', 'Could not analyze this image.'),
+            'description_ur':        agent_result.get('message_ur', 'اس تصویر کا تجزیہ نہیں ہو سکا۔'),
+            'symptoms_en':           [
+                'Upload a clear close-up of a plant leaf',
+                'Use good daylight',
+                'Focus on the affected area',
+                'Distance: 15-25cm from leaf',
+            ],
+            'symptoms_ur':           [
+                'پودے کے پتے کی واضح تصویر لیں',
+                'اچھی روشنی میں',
+                'متاثرہ حصے پر فوکس کریں',
+                '15-25 سینٹی میٹر کے فاصلے سے',
+            ],
+            'organic_treatment_en':  'N/A - Retake photo',
+            'organic_treatment_ur':  'قابل اطلاق نہیں',
+            'chemical_treatment_en': 'N/A',
+            'chemical_treatment_ur': 'قابل اطلاق نہیں',
+            'prevention_en':         'N/A',
+            'prevention_ur':         'قابل اطلاق نہیں',
+            'model_used':            'none',
+            'inference_ms':          agent_result.get('inference_ms', 0),
+            'agent_log':             agent_result.get('agent_log', []),
+            'reason':                agent_result.get('reason', ''),
         }
 
+    # Success case
+    label      = agent_result['label']
+    info       = DISEASE_INFO.get(label, DISEASE_INFO.get('__default__'))
+    is_healthy = 'healthy' in label.lower()
+
+    if '___' in label:
+        plant, disease = label.split('___')
+        plant   = plant.replace('_', ' ')
+        disease = disease.replace('_', ' ')
+    else:
+        plant   = agent_result.get('crop_type', 'Plant')
+        disease = label.replace('_', ' ')
+
     return {
-        "crop_type":             crop_type,
-        "plant_type":            plant,
-        "disease_name_en":       info.get("name_en", disease),
-        "disease_name_ur":       info.get("name_ur", disease),
-        "severity":              "Healthy" if is_healthy else info.get("severity", "Moderate"),
-        "confidence":            round(confidence * 100, 2),
-        "description_en":        info.get("desc_en", f"{plant} {'is healthy' if is_healthy else 'shows signs of ' + disease}."),
-        "description_ur":        info.get("desc_ur", f"پودا {'صحت مند ہے' if is_healthy else disease + ' سے متاثر ہے'}"),
-        "symptoms_en":           info.get("symptoms_en", ["No visible symptoms"] if is_healthy else [f"Signs of {disease}"]),
-        "symptoms_ur":           info.get("symptoms_ur", ["کوئی علامت نہیں"] if is_healthy else ["علامات نظر آ رہی ہیں"]),
-        "organic_treatment_en":  info.get("organic_en", "Maintain good plant hygiene." if is_healthy else "Remove affected parts, use neem oil."),
-        "organic_treatment_ur":  info.get("organic_ur", "پودوں کی صفائی کا خیال رکھیں۔" if is_healthy else "متاثرہ حصے ہٹائیں، نیم کا تیل استعمال کریں۔"),
-        "chemical_treatment_en": info.get("chemical_en", "None needed." if is_healthy else "Consult local agriculture extension."),
-        "chemical_treatment_ur": info.get("chemical_ur", "ضرورت نہیں" if is_healthy else "مقامی زرعی ماہر سے مشورہ کریں۔"),
-        "prevention_en":         info.get("prevention_en", "Regular monitoring and crop rotation."),
-        "prevention_ur":         info.get("prevention_ur", "باقاعدہ نگرانی اور فصل بدلیں۔"),
-        "model_used":            model_used,
-        "inference_ms":          inference_ms,
+        'crop_type':             agent_result['crop_type'],
+        'plant_type':            plant,
+        'disease_name_en':       info.get('name_en', disease),
+        'disease_name_ur':       info.get('name_ur', disease),
+        'severity':              'Healthy' if is_healthy else info.get('severity', 'Moderate'),
+        'confidence':            round(agent_result['confidence'] * 100, 2),
+        'description_en':        info.get('desc_en', ''),
+        'description_ur':        info.get('desc_ur', ''),
+        'symptoms_en':           info.get('symptoms_en', []),
+        'symptoms_ur':           info.get('symptoms_ur', []),
+        'organic_treatment_en':  info.get('organic_en', ''),
+        'organic_treatment_ur':  info.get('organic_ur', ''),
+        'chemical_treatment_en': info.get('chemical_en', ''),
+        'chemical_treatment_ur': info.get('chemical_ur', ''),
+        'prevention_en':         info.get('prevention_en', ''),
+        'prevention_ur':         info.get('prevention_ur', ''),
+        'model_used':            agent_result['model_used'],
+        'inference_ms':          agent_result['inference_ms'],
+        'agent_log':             agent_result.get('agent_log', []),
     }
 
 
 @app.get("/health")
 def health():
     return {
-        "status":      "ok",
-        "model_loaded": GENERAL_MODEL is not None,
-        "specialist":  ROUTER.status() if ROUTER else {},
-        "mode":        "fully_automatic",
-    }
-
-
-@app.get("/classes")
-def get_classes():
-    if GENERAL_MODEL is None:
-        raise HTTPException(503, "Model not loaded")
-    return {
-        "wheat_classes":   ROUTER.wheat_classes() if ROUTER else [],
-        "chilli_classes":  ROUTER.chilli_classes() if ROUTER else [],
-        "general_classes": GENERAL_MODEL.class_names,
+        'status':          'ok',
+        'model_loaded':    GENERAL_MODEL is not None,
+        'agents_ready':    AGENTS is not None,
+        'gatekeeper':      AGENTS.gatekeeper.ready if AGENTS else False,
+        'wheat':           AGENTS.wheat.ready if AGENTS else False,
+        'chilli':          AGENTS.chilli.ready if AGENTS else False,
     }
 
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    """
-    FULLY AUTOMATIC prediction.
-    Kisan sirf photo upload kare — crop type khud detect hoga.
-    No crop_hint needed from frontend.
-    """
-    if GENERAL_MODEL is None or ROUTER is None:
-        raise HTTPException(503, "Models not loaded yet")
+    if AGENTS is None:
+        raise HTTPException(503, "Agents not loaded")
 
     if not file.content_type.startswith("image/"):
-        raise HTTPException(400, f"Image file chahiye, mila: '{file.content_type}'")
+        raise HTTPException(400, "Image file required")
 
     try:
         raw   = await file.read()
@@ -171,30 +161,15 @@ async def predict(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(400, f"Image decode failed: {e}")
 
-    try:
-        t0     = time.perf_counter()
-
-        # ── SMART AUTO DETECT (Run in background thread to prevent blocking event loop) ──
-        import anyio
-        result = await anyio.to_thread.run_sync(ROUTER.smart_predict, image, GENERAL_MODEL)
-        # ────────────────────────────────────────────────────────────────────
-
-        elapsed = round((time.perf_counter() - t0) * 1000, 1)
-
-        response = build_response(
-            label        = result["label"],
-            confidence   = result["confidence"],
-            crop_type    = result["crop_type"],
-            model_used   = result["model_used"],
-            inference_ms = elapsed,
-        )
-        return JSONResponse(response)
-
-    except Exception as e:
-        raise HTTPException(500, f"Inference failed: {e}")
+    result = AGENTS.analyze(image)
+    return JSONResponse(build_response(result))
 
 
-# ── Serve frontend ────────────────────────────────────────────────────────────
+# ── Serve frontend ────────────────────────────────────────────
 frontend_path = Path(__file__).parent.parent / "frontend"
 if frontend_path.exists():
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
+    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
+
+    @app.get("/")
+    def serve_frontend():
+        return FileResponse(frontend_path / "index.html")
