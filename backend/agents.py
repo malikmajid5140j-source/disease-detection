@@ -1,12 +1,9 @@
 """
 AgriScan AI v3 — Multi-Agent System
 ─────────────────────────────────────
-5 Agents:
-  1. GatekeeperAgent   → CLIP: is this a plant leaf?
-  2. CropRouterAgent   → CLIP: which crop?
-  3. Specialists       → EfficientNetV2-S disease detection
-  4. ConsensusValidator→ Cross-check all predictions
-  5. ResponseBuilder   → Build final response (in main.py)
+Key insight: CLIP dekhta hai PURI image — sirf leaf nahi.
+Wheat field, diseased crop, plant stem — sab accept karo.
+Sirf clearly non-plant reject karo (human face, car, food on plate).
 """
 
 from __future__ import annotations
@@ -49,28 +46,59 @@ CHILLI_CLASSES = [
 
 # ═══════════════════════════════════════════════════════════════
 # AGENT 1 — GATEKEEPER
+# Puri image dekhta hai — sirf clearly non-agricultural reject
 # ═══════════════════════════════════════════════════════════════
 class GatekeeperAgent:
-    PLANT_PROMPTS = [
-        "a photo of a plant leaf",
-        "a photo of a crop leaf with disease",
-        "a close up photo of a leaf",
-        "a diseased plant leaf",
+    """
+    CLIP se check karta hai: Kya yeh agricultural image hai?
+    
+    ACCEPT:
+      - Wheat leaves, stalks, field, crop
+      - Chilli plant, pepper, diseased crop
+      - Any plant, vegetation, farming scene
+      - Blurry/dark crop photo — specialists handle it
+      - Whole plant, stem, roots — not just leaf
+    
+    REJECT (ONLY clearly non-agricultural):
+      - Human face / selfie
+      - Car, building, furniture
+      - Cooked food on plate / restaurant
+      - Screenshot / text / document
+      - Random objects (phone, bottle, etc.)
+    """
+
+    # Broad agricultural prompts — field/crop/plant sab accept
+    AGRI_PROMPTS = [
+        "a photo of agricultural crops or plants",
+        "a photo of wheat or cereal crops in a field",
+        "a photo of chilli or pepper plant",
+        "a photo of diseased or unhealthy plant",
+        "a photo of green or yellow plant vegetation",
+        "a photo of a crop field or farm",
+        "a photo of plant leaves stems or roots",
+        "a photo of a sick or infected crop",
+        "a close up photo of plant texture or surface",
+        "a photo of farming or agriculture",
     ]
-    NOT_PLANT_PROMPTS = [
-        "a photo of a person or human face",
-        "a photo of food on a plate",
-        "a photo of an object",
-        "a photo of a building or street",
-        "a photo of an animal",
-        "a random photo or screenshot",
-        "a raw potato or vegetable",
+
+    # Only CLEARLY non-agricultural things
+    NOT_AGRI_PROMPTS = [
+        "a photo of a human face or person",
+        "a selfie or portrait photo",
+        "a photo of a car or vehicle",
+        "a photo of a building or indoor room",
+        "a photo of cooked food on a plate or in a bowl",
+        "a photo of a smartphone or electronic device",
+        "a screenshot of text or a website",
+        "a photo of an animal like a dog or cat",
+        "a photo of furniture or household objects",
+        "a photo of clothing or fashion",
     ]
 
     def __init__(self):
-        self.model = None
+        self.model      = None
         self.preprocess = None
-        self.ready = False
+        self.ready      = False
 
     def load(self):
         try:
@@ -83,49 +111,79 @@ class GatekeeperAgent:
             self.ready = False
 
     def check(self, image: Image.Image) -> dict:
+        """
+        Returns:
+          is_agri: True = agricultural image, proceed
+          agri_score: 0-1
+          not_agri_score: 0-1
+          reason: debug string
+        """
         if not self.ready:
-            return {"is_plant": True, "plant_score": 0.5,
-                    "not_plant_score": 0.5, "reason": "unavailable"}
+            # CLIP nahi hai — specialists par trust karo
+            return {
+                "is_agri":        True,
+                "agri_score":     0.6,
+                "not_agri_score": 0.4,
+                "reason":         "clip_unavailable_trusting_specialists",
+            }
 
         import clip
-        img_tensor  = self.preprocess(image).unsqueeze(0).to(DEVICE)
-        all_prompts = self.PLANT_PROMPTS + self.NOT_PLANT_PROMPTS
-        text_tensor = clip.tokenize(all_prompts).to(DEVICE)
+        img_t     = self.preprocess(image).unsqueeze(0).to(DEVICE)
+        all_txt   = self.AGRI_PROMPTS + self.NOT_AGRI_PROMPTS
+        text_t    = clip.tokenize(all_txt).to(DEVICE)
 
         with torch.no_grad():
-            img_feat  = self.model.encode_image(img_tensor)
-            txt_feat  = self.model.encode_text(text_tensor)
+            img_feat  = self.model.encode_image(img_t)
+            txt_feat  = self.model.encode_text(text_t)
             img_feat  = img_feat / img_feat.norm(dim=-1, keepdim=True)
             txt_feat  = txt_feat / txt_feat.norm(dim=-1, keepdim=True)
             probs     = (100.0 * img_feat @ txt_feat.T).softmax(dim=-1)[0].cpu().numpy()
 
-        n_plant     = len(self.PLANT_PROMPTS)
-        plant_score = float(probs[:n_plant].sum())
-        not_score   = float(probs[n_plant:].sum())
-        is_plant    = plant_score > not_score and plant_score >= 0.40
+        n_agri      = len(self.AGRI_PROMPTS)
+        agri_score  = float(probs[:n_agri].sum())
+        not_score   = float(probs[n_agri:].sum())
 
-        top_not_idx = int(probs[n_plant:].argmax())
-        top_not     = self.NOT_PLANT_PROMPTS[top_not_idx]
+        top_agri_idx = int(probs[:n_agri].argmax())
+        top_not_idx  = int(probs[n_agri:].argmax())
+        top_agri     = self.AGRI_PROMPTS[top_agri_idx]
+        top_not      = self.NOT_AGRI_PROMPTS[top_not_idx]
+
+        # STRICT rejection — sirf tab reject karo jab:
+        # 1. not_agri clearly wins (>0.65) — ya
+        # 2. agri score bahut kam hai (<0.30)
+        # Dubious cases mein specialists par chhoddo
+        is_agri = not (not_score > 0.65 or agri_score < 0.30)
+
+        reason = (f"agri={agri_score:.2f} not={not_score:.2f} "
+                  f"top_agri='{top_agri[:30]}' "
+                  f"top_not='{top_not[:30]}'")
 
         return {
-            "is_plant":        is_plant,
-            "plant_score":     plant_score,
-            "not_plant_score": not_score,
-            "reason": f"plant={plant_score:.2f} not={not_score:.2f} top_reject={top_not}",
+            "is_agri":        is_agri,
+            "agri_score":     agri_score,
+            "not_agri_score": not_score,
+            "reason":         reason,
         }
 
 
 # ═══════════════════════════════════════════════════════════════
 # AGENT 2 — CROP ROUTER
+# Puri image se crop identify karta hai
 # ═══════════════════════════════════════════════════════════════
 class CropRouterAgent:
+    """
+    Puri image context se crop identify karta hai.
+    Wheat field, yellowing crop, diseased stalks — sab wheat.
+    """
+
     CROP_PROMPTS = {
-        "wheat":  "a photo of wheat leaves or wheat plant",
-        "chilli": "a photo of chilli pepper leaf or mirch plant",
-        "tomato": "a photo of tomato plant leaf",
-        "potato": "a photo of potato plant leaf",
-        "corn":   "a photo of corn or maize leaf",
-        "other":  "a photo of some other plant leaf",
+        "wheat":  "a photo of wheat crop, wheat field, or wheat plant with disease",
+        "chilli": "a photo of chilli plant, pepper crop, or mirch with disease",
+        "tomato": "a photo of tomato plant or tomato leaves with disease",
+        "potato": "a photo of potato plant leaves or potato crop disease",
+        "corn":   "a photo of corn or maize crop or maize plant",
+        "rice":   "a photo of rice crop or paddy field or rice plant",
+        "other":  "a photo of some other agricultural plant or crop",
     }
 
     def __init__(self, gatekeeper: GatekeeperAgent):
@@ -136,14 +194,14 @@ class CropRouterAgent:
             return {"crop": "unknown", "confidence": 0.0, "scores": {}}
 
         import clip
-        img_tensor  = self.gk.preprocess(image).unsqueeze(0).to(DEVICE)
-        keys        = list(self.CROP_PROMPTS.keys())
-        prompts     = list(self.CROP_PROMPTS.values())
-        text_tensor = clip.tokenize(prompts).to(DEVICE)
+        img_t   = self.gk.preprocess(image).unsqueeze(0).to(DEVICE)
+        keys    = list(self.CROP_PROMPTS.keys())
+        prompts = list(self.CROP_PROMPTS.values())
+        text_t  = clip.tokenize(prompts).to(DEVICE)
 
         with torch.no_grad():
-            img_feat  = self.gk.model.encode_image(img_tensor)
-            txt_feat  = self.gk.model.encode_text(text_tensor)
+            img_feat  = self.gk.model.encode_image(img_t)
+            txt_feat  = self.gk.model.encode_text(text_t)
             img_feat  = img_feat / img_feat.norm(dim=-1, keepdim=True)
             txt_feat  = txt_feat / txt_feat.norm(dim=-1, keepdim=True)
             probs     = (100.0 * img_feat @ txt_feat.T).softmax(dim=-1)[0].cpu().numpy()
@@ -153,8 +211,15 @@ class CropRouterAgent:
         top_crop = keys[top_idx]
         top_conf = float(probs[top_idx])
 
-        route_to = top_crop if (top_crop in ("wheat", "chilli") and top_conf > 0.22) else "other"
+        # Lower threshold — specialist models zyada accurate hain
+        if top_crop in ("wheat", "chilli") and top_conf > 0.18:
+            route_to = top_crop
+        elif top_crop in ("tomato", "potato", "corn", "rice") and top_conf > 0.20:
+            route_to = "other"
+        else:
+            route_to = "other"
 
+        print(f"[router] top={top_crop} conf={top_conf:.2f} → routing to {route_to}")
         return {"crop": route_to, "top": top_crop,
                 "confidence": top_conf, "scores": scores}
 
@@ -169,6 +234,7 @@ def _download(url: str, dest: Path) -> bool:
     try:
         print(f"[download] {dest.name}...")
         urllib.request.urlretrieve(url, dest)
+        print(f"[download] done {dest.stat().st_size/1e6:.1f}MB")
         return True
     except Exception as e:
         print(f"[download] failed: {e}")
@@ -243,40 +309,49 @@ class ChilliAgent:
 # AGENT 4 — CONSENSUS VALIDATOR
 # ═══════════════════════════════════════════════════════════════
 class ConsensusValidator:
-    MIN_CONF = 0.68
-    MAX_ENT  = 0.42
-    MIN_GAP  = 0.42
+    """
+    Specialist prediction cross-check.
+    Realistic thresholds — real field images thodi noisy hoti hain.
+    """
+    MIN_CONF = 0.65   # 65% minimum
+    MAX_ENT  = 0.45   # entropy limit
+    MIN_GAP  = 0.40   # top-2 gap
 
     def validate(self, pred: dict, route: dict, gk: dict) -> dict:
-        if not gk.get("is_plant", True):
-            return self._reject("not_a_plant",
-                "This does not appear to be a plant leaf.",
-                "یہ پودے کا پتہ نہیں لگتی۔")
 
+        # Not agricultural at all
+        if not gk.get("is_agri", True):
+            return self._reject("not_agricultural",
+                "This does not appear to be an agricultural image.",
+                "یہ زرعی تصویر نہیں لگتی۔")
+
+        # Router strongly says different crop
         router_crop = route.get("crop", "unknown")
         spec_crop   = pred.get("crop_type", "").lower()
         if (router_crop not in ("unknown", "other") and
                 router_crop != spec_crop and
-                route.get("confidence", 0) > 0.35):
-            return self._reject(
-                f"wrong_crop",
+                route.get("confidence", 0) > 0.40):
+            return self._reject("wrong_crop",
                 f"This looks like {router_crop.title()}, not {spec_crop.title()}.",
                 f"یہ {router_crop} لگتا ہے، {spec_crop} نہیں۔")
 
+        # Confidence check
         if pred["confidence"] < self.MIN_CONF:
             return self._reject("low_confidence",
-                "Image unclear. Please take a closer photo.",
-                "تصویر واضح نہیں۔ قریب سے دوبارہ لیں۔")
+                "Image unclear or too far. Please take a closer photo.",
+                "تصویر واضح نہیں یا دور سے لی ہے۔ قریب سے دوبارہ لیں۔")
 
+        # Entropy check
         if pred["entropy"] > self.MAX_ENT:
             return self._reject("high_entropy",
-                "Multiple items in image. Focus on one leaf.",
-                "تصویر میں زیادہ چیزیں ہیں۔ ایک پتے پر فوکس کریں۔")
+                "Too much variation in image. Focus on the affected area.",
+                "تصویر میں بہت زیادہ variation ہے۔ متاثرہ حصے پر فوکس کریں۔")
 
+        # Top-2 gap check
         if pred["top2_gap"] < self.MIN_GAP:
             return self._reject("ambiguous",
-                "Two diseases look similar. Upload a clearer photo.",
-                "دو بیماریاں ملتی جلتی ہیں۔ واضح تصویر لیں۔")
+                "Two possibilities detected. Please upload a clearer photo.",
+                "دو ممکنہ بیماریاں ہیں۔ واضح تصویر لیں۔")
 
         score = pred["confidence"] * pred["top2_gap"] * (1 - pred["entropy"])
         return {"valid": True, "score": score}
@@ -319,62 +394,69 @@ class MultiAgentSystem:
         t0  = time.perf_counter()
         log = []
 
-        # Agent 1
+        # ── Agent 1: Gatekeeper ──────────────────────────────
         gk = self.gatekeeper.check(image)
         log.append(f"[gatekeeper] {gk['reason']}")
 
-        if not gk["is_plant"] and gk["not_plant_score"] > 0.70:
+        # Sirf clearly non-agricultural reject karo
+        if not gk["is_agri"]:
             return self._unclear(
-                "not_a_plant",
-                "This does not appear to be a plant leaf. Please upload a clear close-up photo of an affected crop leaf.",
-                "یہ تصویر پودے کا پتہ نہیں لگتی۔ براہ کرم متاثرہ فصل کے پتے کی واضح تصویر اپلوڈ کریں۔",
+                "not_agricultural",
+                "This does not appear to be a crop or plant image. Please upload a photo of an affected plant.",
+                "یہ فصل یا پودے کی تصویر نہیں لگتی۔ براہ کرم متاثرہ پودے کی تصویر اپلوڈ کریں۔",
                 log, t0)
 
-        # Agent 2
+        # ── Agent 2: Router ──────────────────────────────────
         route = self.router.route(image)
-        log.append(f"[router] {route['crop']} conf={route['confidence']:.2f}")
+        log.append(f"[router] → {route['crop']} (conf={route['confidence']:.2f})")
 
-        # Agent 3 + 4
+        # ── Agent 3: Specialists ─────────────────────────────
+
+        # Try wheat specialist
         if route["crop"] == "wheat" and self.wheat.ready:
             pred = self.wheat.predict(image)
-            log.append(f"[wheat] {pred['label']} {pred['confidence']:.2f}")
+            log.append(f"[wheat] {pred['label']} conf={pred['confidence']:.2f} "
+                       f"gap={pred['top2_gap']:.2f} ent={pred['entropy']:.2f}")
             v = self.validator.validate(pred, route, gk)
             if v["valid"]:
                 return self._success(pred, v["score"], log, t0)
-            log.append(f"[validator] rejected: {v['reason']}")
+            log.append(f"[validator] rejected wheat: {v['reason']}")
             return self._unclear(v["reason"], v["msg_en"], v["msg_ur"], log, t0)
 
+        # Try chilli specialist
         if route["crop"] == "chilli" and self.chilli.ready:
             pred = self.chilli.predict(image)
-            log.append(f"[chilli] {pred['label']} {pred['confidence']:.2f}")
+            log.append(f"[chilli] {pred['label']} conf={pred['confidence']:.2f} "
+                       f"gap={pred['top2_gap']:.2f} ent={pred['entropy']:.2f}")
             v = self.validator.validate(pred, route, gk)
             if v["valid"]:
                 return self._success(pred, v["score"], log, t0)
-            log.append(f"[validator] rejected: {v['reason']}")
+            log.append(f"[validator] rejected chilli: {v['reason']}")
             return self._unclear(v["reason"], v["msg_en"], v["msg_ur"], log, t0)
 
-        # General fallback
+        # General PlantVillage fallback (other crops)
         if self.general is not None:
             try:
                 preds = self.general.predict(image, top_k=1)
-                if preds and preds[0]["confidence"] > 0.62:
+                if preds and preds[0]["confidence"] > 0.58:
                     top   = preds[0]
                     label = top["label"]
-                    crop  = label.split("___")[0].replace("_", " ") if "___" in label else "Plant"
-                    log.append(f"[general] {label} {top['confidence']:.2f}")
+                    crop  = (label.split("___")[0].replace("_", " ")
+                             if "___" in label else "Plant")
+                    log.append(f"[general] {label} conf={top['confidence']:.2f}")
                     return self._success(
                         {"label": label, "confidence": top["confidence"],
                          "crop_type": crop, "model_used": "general_plantvillage",
                          "top2_gap": 0.5, "entropy": 0.3},
                         top["confidence"], log, t0)
-                log.append("[general] low confidence")
+                log.append(f"[general] low conf={preds[0]['confidence']:.2f if preds else 0:.2f}")
             except Exception as e:
                 log.append(f"[general] error: {e}")
 
         return self._unclear(
             "no_prediction",
-            "Could not identify the disease. Upload a clear, well-lit close-up of the affected leaf.",
-            "بیماری کی شناخت نہیں ہو سکی۔ واضح اور روشن تصویر لیں۔",
+            "Could not identify the crop or disease. Please upload a clear, well-lit photo of the affected plant.",
+            "فصل یا بیماری کی شناخت نہیں ہو سکی۔ براہ کرم متاثرہ پودے کی واضح اور روشن تصویر لیں۔",
             log, t0)
 
     def _success(self, pred, score, log, t0) -> dict:
