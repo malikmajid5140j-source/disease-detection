@@ -212,7 +212,7 @@ class CropRouterAgent:
         top_conf = float(probs[top_idx])
 
         # Lower threshold — specialist models zyada accurate hain
-        if top_crop in ("wheat", "chilli") and top_conf > 0.18:
+        if top_crop in ("wheat", "chilli") and top_conf > 0.12:
             route_to = top_crop
         elif top_crop in ("tomato", "potato", "corn", "rice") and top_conf > 0.20:
             route_to = "other"
@@ -313,47 +313,24 @@ class ConsensusValidator:
     Specialist prediction cross-check.
     Realistic thresholds — real field images thodi noisy hoti hain.
     """
-    MIN_CONF = 0.65   # 65% minimum
-    MAX_ENT  = 0.45   # entropy limit
-    MIN_GAP  = 0.40   # top-2 gap
+    MIN_CONF = 0.55
+    MAX_ENT  = 0.65
+    MIN_GAP  = 0.30
 
     def validate(self, pred: dict, route: dict, gk: dict) -> dict:
-
-        # Not agricultural at all
         if not gk.get("is_agri", True):
             return self._reject("not_agricultural",
                 "This does not appear to be an agricultural image.",
                 "یہ زرعی تصویر نہیں لگتی۔")
 
-        # Router strongly says different crop
-        router_crop = route.get("crop", "unknown")
-        spec_crop   = pred.get("crop_type", "").lower()
-        if (router_crop not in ("unknown", "other") and
-                router_crop != spec_crop and
-                route.get("confidence", 0) > 0.40):
-            return self._reject("wrong_crop",
-                f"This looks like {router_crop.title()}, not {spec_crop.title()}.",
-                f"یہ {router_crop} لگتا ہے، {spec_crop} نہیں۔")
-
-        # Confidence check
+        # Confidence check only — entropy aur gap hata do
+        # Field photos mein entropy naturally high hoti hai
         if pred["confidence"] < self.MIN_CONF:
             return self._reject("low_confidence",
-                "Image unclear or too far. Please take a closer photo.",
-                "تصویر واضح نہیں یا دور سے لی ہے۔ قریب سے دوبارہ لیں۔")
+                "Cannot identify disease clearly. Please take a closer photo of the affected area.",
+                "بیماری واضح نہیں۔ متاثرہ حصے کے قریب سے تصویر لیں۔")
 
-        # Entropy check
-        if pred["entropy"] > self.MAX_ENT:
-            return self._reject("high_entropy",
-                "Too much variation in image. Focus on the affected area.",
-                "تصویر میں بہت زیادہ variation ہے۔ متاثرہ حصے پر فوکس کریں۔")
-
-        # Top-2 gap check
-        if pred["top2_gap"] < self.MIN_GAP:
-            return self._reject("ambiguous",
-                "Two possibilities detected. Please upload a clearer photo.",
-                "دو ممکنہ بیماریاں ہیں۔ واضح تصویر لیں۔")
-
-        score = pred["confidence"] * pred["top2_gap"] * (1 - pred["entropy"])
+        score = pred["confidence"]
         return {"valid": True, "score": score}
 
     @staticmethod
