@@ -1,0 +1,2 @@
+[phases.build]
+cmds = ["python backend/download_models.py"]
