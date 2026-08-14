@@ -59,12 +59,12 @@ CHILLI_CLASSES = [
 # Correct crop avg: ~0.577
 # Wrong crop avg:   ~0.287
 # Threshold at midpoint + safety:
-COMBINED_SCORE_THRESHOLD = 0.44   # below this → wrong crop / unclear
+COMBINED_SCORE_THRESHOLD = 0.55   # below this → wrong crop / unclear
 
 # Individual safety nets
-MIN_CONFIDENCE = 0.70   # below 70% → definitely wrong
-MAX_ENTROPY    = 0.40   # above 0.40 → model confused
-MIN_TOP2_GAP   = 0.45   # below 0.45 → two classes too close
+MIN_CONFIDENCE = 0.82   # below 82% → definitely wrong
+MAX_ENTROPY    = 0.28   # above 0.28 → model confused
+MIN_TOP2_GAP   = 0.65   # below 0.65 → two classes too close
 
 
 def _download_if_needed(url: str, dest: Path) -> bool:
@@ -259,7 +259,7 @@ class SpecialistRouter:
                             if "___" in label else "Unknown"
 
                     # General model bhi low confidence → unclear
-                    if conf < 0.55:
+                    if conf < 0.75:
                         print(f"[specialist] General also uncertain "
                               f"({conf:.2f}) → Unclear")
                         return self._unclear()

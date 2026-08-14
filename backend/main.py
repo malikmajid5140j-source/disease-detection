@@ -197,8 +197,4 @@ async def predict(file: UploadFile = File(...)):
 # ── Serve frontend ────────────────────────────────────────────────────────────
 frontend_path = Path(__file__).parent.parent / "frontend"
 if frontend_path.exists():
-    app.mount("/static", StaticFiles(directory=frontend_path), name="static")
-
-    @app.get("/")
-    def serve_frontend():
-        return FileResponse(frontend_path / "index.html")
+    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="static")
