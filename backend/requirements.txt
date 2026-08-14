@@ -4,6 +4,6 @@ python-multipart==0.0.9
 Pillow==10.4.0
 torch>=2.0.0
 torchvision>=0.15.0
-git+https://github.com/openai/CLIP.git
 ftfy
 regex
+git+https://github.com/openai/CLIP.git

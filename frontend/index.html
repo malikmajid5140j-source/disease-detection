@@ -1040,20 +1040,11 @@
 
         clearInterval(timerInterval);
         
-        // Handle unclear image FIRST
-        if (apiResult.model_used === 'none' || apiResult.crop_type === 'Unknown' || apiResult.confidence === 0) {
+        if (apiResult.model_used === 'none' || apiResult.crop_type === 'Unknown') {
           showUnclearImageState(apiResult);
           return;
         }
-        
-        // Render final result to UI
-        renderDiagnosisResults(apiResult);
-
-        // Reveal results section
-        setTimeout(() => {
-          resultsSec.classList.remove('hidden');
-          resultsSec.scrollIntoView({ behavior: 'smooth' });
-        }, 500);
+        showNormalResults(apiResult);
 
       } catch (error) {
         clearInterval(timerInterval);
@@ -1214,41 +1205,27 @@
       const badge   = document.getElementById('ai-model-badge-inner');
       if (!wrapper || !badge) return;
 
-      const styles = {
-        'wheat_specialist': {
-          bg:     'rgba(251, 191, 36, 0.12)',
-          border: '1px solid rgba(251, 191, 36, 0.45)',
-          color:  '#fbbf24',
-          label:  '🌾 Wheat AI · 92.3%'
-        },
-        'chilli_specialist': {
-          bg:     'rgba(239, 68, 68, 0.12)',
-          border: '1px solid rgba(239, 68, 68, 0.45)',
-          color:  '#f87171',
-          label:  '🌶️ Chilli AI · 99.4%'
-        },
-        'general_plantvillage': {
-          bg:     'rgba(99, 102, 241, 0.12)',
-          border: '1px solid rgba(99, 102, 241, 0.45)',
-          color:  '#818cf8',
-          label:  '🌿 General AI · 39 Crops'
-        },
-        'none': {
-          bg:     'rgba(107, 114, 128, 0.12)',
-          border: '1px solid rgba(107, 114, 128, 0.35)',
-          color:  '#9ca3af',
-          label:  '⚠️ Detection Failed'
-        }
+      const badges = {
+        'wheat_specialist':     { color: '#fbbf24', text: '🌾 Wheat AI · 92.3%' },
+        'chilli_specialist':    { color: '#f87171', text: '🌶️ Chilli AI · 99.4%' },
+        'general_plantvillage': { color: '#818cf8', text: '🌿 General AI · 39 Crops' }
       };
 
-      const s = styles[modelUsed] || styles['general_plantvillage'];
-      Object.assign(badge.style, {
-        background: s.bg,
-        border:     s.border,
-        color:      s.color,
-      });
-      badge.textContent    = s.label;
+      const b = badges[modelUsed] || badges['general_plantvillage'];
+      badge.style.color = b.color;
+      badge.style.border = `1px solid ${b.color}`;
+      badge.style.background = `${b.color}15`;
+      badge.textContent = b.text;
       wrapper.style.display = 'block';
+    }
+
+    function showNormalResults(data) {
+      renderDiagnosisResults(data);
+      const resultsSec = document.getElementById('results-section');
+      setTimeout(() => {
+        resultsSec.classList.remove('hidden');
+        resultsSec.scrollIntoView({ behavior: 'smooth' });
+      }, 500);
     }
 
     // Render structured results into UI
@@ -1291,12 +1268,7 @@
       document.getElementById('ur-prevention').textContent = data.prevention_ur || "معلومات دستیاب نہیں";
 
       const urSymptomsList = document.getElementById('ur-symptoms');
-      urSymptomsList.innerHTML = "";
-      (data.symptoms_ur || []).forEach(sym => {
-        const li = document.createElement('li');
-        li.textContent = `• ${sym}`;
-        urSymptomsList.appendChild(li);
-      });
+      urSymptomsList.innerHTML = (data.symptoms_ur || []).map(sym => `<li>• ${sym}</li>`).join('');
       
       showCropDetectedTag(data.crop_type, data.model_used);
       showModelBadge(data.model_used);

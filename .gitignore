@@ -10,4 +10,5 @@ __pycache__/
 models/
 test_ping.py
 download_presets.py
-
+*.pyo
+.DS_Store

@@ -1,23 +1,9 @@
-// src/api/predict.js
-// Drop this file in your React project at src/api/predict.js
-
+// src/api/predict.js — AgriScan AI v3
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
-/**
- * Send image to FastAPI and get predictions back.
- * @param {File} file  - image file from input/drop
- * @returns {Promise<{
- *   top_prediction: string,
- *   confidence: number,
- *   predictions: {label: string, confidence: number}[],
- *   model: string,
- *   inference_time_ms: number,
- *   image_size: number[]
- * }>}
- */
 export async function predictDisease(file) {
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", file);  // ONLY file — AI decides everything automatically
 
   const res = await fetch(`${API_URL}/predict`, {
     method: "POST",
@@ -29,17 +15,33 @@ export async function predictDisease(file) {
     throw new Error(err.detail ?? `HTTP ${res.status}`);
   }
 
-  return res.json();
+  const data = await res.json();
+
+  // Handle unclear image
+  if (data.model_used === "none" || data.crop_type === "Unknown") {
+    return { ...data, isUnclear: true };
+  }
+
+  return { ...data, isUnclear: false };
 }
 
-/** Check if the backend is alive and model is loaded */
 export async function checkHealth() {
   const res = await fetch(`${API_URL}/health`);
   return res.json();
 }
 
-/** Get all class names the model supports */
 export async function getClasses() {
   const res = await fetch(`${API_URL}/classes`);
   return res.json();
+}
+
+// Model badge helper
+export function getModelBadge(modelUsed) {
+  const badges = {
+    wheat_specialist:     { emoji: "🌾", label: "Wheat AI",   acc: "92.3%", color: "#fbbf24" },
+    chilli_specialist:    { emoji: "🌶️", label: "Chilli AI",  acc: "99.4%", color: "#f87171" },
+    general_plantvillage: { emoji: "🌿", label: "General AI", acc: "39 crops", color: "#818cf8" },
+    none:                 { emoji: "⚠️", label: "Unclear",     acc: "",       color: "#9ca3af" },
+  };
+  return badges[modelUsed] ?? badges.none;
 }

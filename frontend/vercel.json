@@ -3,6 +3,14 @@
     {
       "source": "/predict",
       "destination": "https://disease-detection-production.up.railway.app/predict"
+    },
+    {
+      "source": "/health",
+      "destination": "https://disease-detection-production.up.railway.app/health"
+    },
+    {
+      "source": "/classes",
+      "destination": "https://disease-detection-production.up.railway.app/classes"
     }
   ]
 }
