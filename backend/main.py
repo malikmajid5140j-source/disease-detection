@@ -15,8 +15,8 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
-from .agents import MultiAgentSystem
-from .disease_info import DISEASE_INFO
+from agents import MultiAgentSystem
+from disease_info import DISEASE_INFO
 
 
 SYSTEM: MultiAgentSystem | None = None
