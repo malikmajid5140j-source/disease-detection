@@ -3,11 +3,7 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies needed for OpenCV and PyTorch
-RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
-    libglib2.0-0 \
-    && rm -rf /var/lib/apt/lists/*
+# No system dependencies needed because we use opencv-python-headless
 
 # Copy backend requirements first (for better Docker caching)
 COPY requirements.txt .
