@@ -183,8 +183,26 @@ class GatekeeperAgent:
         self.clip_ready    = False
 
     def load(self):
-        print("[gatekeeper] CLIP disabled to prevent OOM crash on Railway (500MB RAM limit) — using EfficientNet fallback")
-        self.clip_ready = False
+        try:
+            import clip
+            self.clip_model, self.clip_preproc = clip.load("RN50", device=DEVICE)
+
+            all_prompts = []
+            for category, prompts in self.CLIP_PROMPTS.items():
+                for p in prompts:
+                    all_prompts.append(p)
+                    self.prompt_map.append(category)
+
+            tokens = clip.tokenize(all_prompts).to(DEVICE)
+            with torch.no_grad():
+                self.text_features = self.clip_model.encode_text(tokens)
+                self.text_features = self.text_features / self.text_features.norm(dim=-1, keepdim=True)
+
+            self.clip_ready = True
+            print("[gatekeeper] CLIP RN50 ready OK")
+        except Exception as e:
+            print(f"[gatekeeper] CLIP RN50 unavailable: {e} — will use EfficientNet fallback")
+            self.clip_ready = False
 
     def check(self, image: Image.Image, wheat_model=None, chilli_model=None) -> dict:
         """
