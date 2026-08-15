@@ -18,8 +18,11 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # Copy the rest of the application
 COPY . .
 
+# Set working directory to backend where main.py lives
+WORKDIR /app/backend
+
 # Expose port
 EXPOSE $PORT
 
 # Run the FastAPI server
-CMD uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8080}
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
