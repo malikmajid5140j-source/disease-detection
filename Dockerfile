@@ -3,7 +3,8 @@ FROM python:3.10-slim
 # Set working directory
 WORKDIR /app
 
-# No system dependencies needed because we use opencv-python-headless
+# Install git (required for pip installing CLIP from Github)
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements first (for better Docker caching)
 COPY backend/requirements.txt ./backend/
