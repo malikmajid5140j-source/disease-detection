@@ -1,8 +1,8 @@
 """
 AgriScan AI v3 — FastAPI Backend
 ──────────────────────────────────
-Multi-agent disease detection.
-Kisan sirf photo upload kare — sab automatic.
+Wheat & Chilli specialist models only.
+General PlantVillage model removed.
 """
 
 import io
@@ -15,30 +15,19 @@ from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 
-from model import PlantDiseaseModel
-from agents import MultiAgentSystem
-from disease_info import DISEASE_INFO
+from .agents import MultiAgentSystem
+from .disease_info import DISEASE_INFO
 
 
-GENERAL: PlantDiseaseModel | None = None
-SYSTEM:  MultiAgentSystem  | None = None
-PT_PATH = Path(__file__).parent / "plant_disease_model_1_latest.pt"
+SYSTEM: MultiAgentSystem | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global GENERAL, SYSTEM
+    global SYSTEM
 
-    if not PT_PATH.exists():
-        raise FileNotFoundError(f"Model not found: {PT_PATH}")
-
-    print("[startup] Loading general PlantVillage model...")
-    GENERAL = PlantDiseaseModel(pt_path=PT_PATH)
-    GENERAL.load()
-    print(f"[startup] General model ready — {GENERAL.num_classes} classes")
-
-    print("[startup] Loading multi-agent system...")
-    SYSTEM = MultiAgentSystem(general_model=GENERAL)
+    print("[startup] Loading multi-agent system (Wheat + Chilli specialists)...")
+    SYSTEM = MultiAgentSystem(general_model=None)   # No general model
     SYSTEM.load()
     print(f"[startup] System ready — {SYSTEM.status()}")
 
@@ -49,7 +38,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="AgriScan AI v3",
-    description="Multi-agent plant disease detection",
+    description="Wheat & Chilli specialist disease detection",
     version="3.0.0",
     lifespan=lifespan,
 )
@@ -61,11 +50,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    import traceback
+    traceback.print_exc()
+    return JSONResponse({"error": str(exc), "trace": traceback.format_exc()}, status_code=500)
+
 
 def _build_response(result: dict) -> dict:
     """Convert agent result → full API response with Urdu treatments."""
 
-    # Unclear / rejected image
     if not result.get("success"):
         return {
             "crop_type":             "Unknown",
@@ -77,13 +71,13 @@ def _build_response(result: dict) -> dict:
             "description_en":        result.get("msg_en", "Could not analyze this image."),
             "description_ur":        result.get("msg_ur", "اس تصویر کا تجزیہ نہیں ہو سکا۔"),
             "symptoms_en": [
-                "Upload a clear close-up of a plant leaf",
+                "Upload a clear close-up of a wheat or chilli leaf",
                 "Use good daylight — avoid flash",
                 "Focus on the affected area only",
                 "Hold camera 15-25cm from leaf",
             ],
             "symptoms_ur": [
-                "پودے کے پتے کی واضح تصویر لیں",
+                "گندم یا مرچ کے پتے کی واضح تصویر لیں",
                 "اچھی روشنی میں — فلیش سے گریز کریں",
                 "صرف متاثرہ حصے پر فوکس کریں",
                 "کیمرہ پتے سے 15-25 سینٹی میٹر دور رکھیں",
@@ -97,20 +91,16 @@ def _build_response(result: dict) -> dict:
             "model_used":            "none",
             "inference_ms":          result.get("inference_ms", 0),
             "agent_log":             result.get("agent_log", []),
+            "heatmap_base64":        "",
             "reason":                result.get("reason", ""),
         }
 
-    # Successful detection
     label      = result["label"]
     info       = DISEASE_INFO.get(label, DISEASE_INFO["__default__"])
     is_healthy = "healthy" in label.lower()
 
-    if "___" in label:
-        plant   = label.split("___")[0].replace("_", " ")
-        disease = label.split("___")[1].replace("_", " ")
-    else:
-        plant   = result.get("crop_type", "Plant")
-        disease = label.replace("_", " ")
+    plant   = result.get("crop_type", "Plant")
+    disease = label.replace("_", " ")
 
     return {
         "crop_type":             result["crop_type"],
@@ -132,45 +122,34 @@ def _build_response(result: dict) -> dict:
         "model_used":            result["model_used"],
         "inference_ms":          result["inference_ms"],
         "agent_log":             result.get("agent_log", []),
+        "heatmap_base64":        result.get("heatmap_base64", ""),
     }
 
 
 @app.get("/health")
 def health():
     return {
-        "status":       "ok",
-        "model_loaded": GENERAL is not None,
-        "agents":       SYSTEM.status() if SYSTEM else {},
+        "status": "ok",
+        "agents": SYSTEM.status() if SYSTEM else {},
     }
 
 
 @app.get("/classes")
 def get_classes():
-    if not GENERAL:
+    if not SYSTEM:
         raise HTTPException(503, "Not ready")
     return {
-        "general_classes": GENERAL.class_names,
-        "wheat_classes":   list(SYSTEM.wheat.ready and
-                           ["Aphid","Black_Rust","Brown_Rust","Common_Root_Rot",
-                            "Fusarium_Head_Blight","Healthy","Leaf_Blight","Mite",
-                            "Powdery_Mildew","Septoria","Smut","Stem_Fly",
-                            "Tan_Spot","Wheat_Blast","Yellow_Rust"] or []),
-        "chilli_classes":  list(SYSTEM.chilli.ready and
-                           ["Anthracnose","Damping_Off","Healthy","Leaf_Curl_Virus",
-                            "Leaf_Spot","Veinal_Mottle_Virus","Whitefly","Yellowish"] or []),
+        "wheat_classes":  ["Aphid","Black_Rust","Brown_Rust","Common_Root_Rot",
+                           "Fusarium_Head_Blight","Healthy","Leaf_Blight","Mite",
+                           "Powdery_Mildew","Septoria","Smut","Stem_Fly",
+                           "Tan_Spot","Wheat_Blast","Yellow_Rust"],
+        "chilli_classes": ["Anthracnose","Damping_Off","Healthy","Leaf_Curl_Virus",
+                           "Leaf_Spot","Veinal_Mottle_Virus","Whitefly","Yellowish"],
     }
 
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    """
-    Kisan sirf photo upload kare.
-    AI automatically:
-      1. Checks if it's a plant leaf
-      2. Identifies crop type
-      3. Detects disease
-      4. Returns Urdu treatment
-    """
     if SYSTEM is None:
         raise HTTPException(503, "System not ready")
 
@@ -188,7 +167,7 @@ async def predict(file: UploadFile = File(...)):
     return JSONResponse(response)
 
 
-# Serve frontend if present
+# Serve frontend
 frontend_path = Path(__file__).parent.parent / "frontend"
 if frontend_path.exists():
     app.mount("/static", StaticFiles(directory=str(frontend_path)), name="static")

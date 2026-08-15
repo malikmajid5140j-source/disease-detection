@@ -1,9 +1,23 @@
+# AgriScan AI v3 — Backend Dependencies
+
+# Web framework
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 python-multipart==0.0.9
-Pillow==10.4.0
+
+# ML core
 torch>=2.0.0
 torchvision>=0.15.0
+numpy>=1.26.0
+
+# YOLOv8 — Gatekeeper (latest, supports torch 2.11)
+ultralytics>=8.3.0
+
+# Image processing
+Pillow==10.4.0
+
+# Env & utils
+python-dotenv==1.0.1
 ftfy
 regex
 git+https://github.com/openai/CLIP.git
