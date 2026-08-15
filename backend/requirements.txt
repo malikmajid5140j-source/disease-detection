@@ -15,6 +15,7 @@ ultralytics>=8.3.0
 
 # Image processing
 Pillow==10.4.0
+opencv-python-headless>=4.8.0
 
 # Env & utils
 python-dotenv==1.0.1
