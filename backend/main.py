@@ -153,7 +153,7 @@ async def predict(file: UploadFile = File(...)):
     if SYSTEM is None:
         raise HTTPException(503, "System not ready")
 
-    if not file.content_type.startswith("image/"):
+    if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(400, f"Image required, got {file.content_type}")
 
     try:
